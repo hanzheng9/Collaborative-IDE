@@ -19,7 +19,7 @@ body {
 
 .page {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
   flex-direction: column;
 }
 
@@ -45,7 +45,106 @@ body {
   font-size: 14px;
 }
 
-.editorShell {
+.workspace {
+  display: grid;
+  height: calc(100vh - 98px);
   min-height: 0;
   flex: 1;
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
+.sidebar {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  border-right: 1px solid #252b36;
+  background: #12161d;
+}
+
+.sidebarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #252b36;
+  padding: 14px;
+  color: #d7deea;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sidebarHeader button,
+.renameButton {
+  border: 1px solid #364255;
+  border-radius: 6px;
+  background: #202838;
+  color: #f5f7fb;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 7px 10px;
+}
+
+.sidebarHeader button:hover,
+.renameButton:hover:not(:disabled) {
+  background: #2a3447;
+}
+
+.fileList {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  overflow: auto;
+  padding: 10px;
+}
+
+.fileItem {
+  width: 100%;
+  overflow: hidden;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #aab3c2;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 9px 10px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileItem:hover {
+  background: #1b222e;
+  color: #f5f7fb;
+}
+
+.fileItem.active {
+  background: #263246;
+  color: #ffffff;
+}
+
+.renameButton {
+  margin: 10px;
+}
+
+.renameButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.editorShell {
+  min-width: 0;
+  min-height: 0;
+}
+
+.editorLoading {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: #aab3c2;
+  font-size: 14px;
 }
