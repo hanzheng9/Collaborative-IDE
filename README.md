@@ -1,14 +1,15 @@
 # Collaborative IDE
 
-A full-stack collaborative code editor skeleton with basic real-time multi-file synchronization:
+A full-stack collaborative code editor skeleton with real-time multi-file synchronization and collaboration awareness:
 
 - Next.js + TypeScript frontend
 - Monaco editor visible on the frontend
 - Node.js + Express backend
 - Socket.io room-based synchronization with in-memory workspace state
+- Active collaborator list with file and cursor awareness
 - Backend `/health` endpoint
 
-Authentication, AI features, cursor tracking, and PostgreSQL integration are intentionally not implemented yet.
+Authentication, AI features, permissions, and PostgreSQL integration are intentionally not implemented yet.
 
 ## Project Structure
 
@@ -109,3 +110,21 @@ Basic Week 3 test:
 6. Type different code in different files.
 7. Switch between files and confirm each file keeps its own content.
 8. Open Tab C and confirm it loads all files with the latest names and contents.
+
+## Test Collaboration Awareness
+
+Open three browser tabs at:
+
+```text
+http://localhost:3000
+```
+
+Each tab gets a temporary collaborator identity, such as `User 1`, plus a color.
+
+Basic Week 4 test:
+
+1. Confirm each tab shows all connected collaborators.
+2. Switch files in one tab and confirm the collaborator list updates elsewhere.
+3. Move the cursor in one tab and confirm remote cursors appear in other tabs.
+4. Click another collaborator to jump to their current file and cursor line.
+5. Close one tab and confirm that collaborator disappears from the others.

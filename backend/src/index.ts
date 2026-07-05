@@ -25,11 +25,35 @@ type RenameFilePayload = {
   fileName: string;
 };
 
+type FileSelectedPayload = {
+  workspaceId: string;
+  fileId: string;
+};
+
+type CursorPosition = {
+  lineNumber: number;
+  column: number;
+};
+
+type CursorChangePayload = {
+  workspaceId: string;
+  fileId: string;
+  cursorPosition: CursorPosition;
+};
+
 type WorkspaceFile = {
   fileId: string;
   fileName: string;
   language: string;
   content: string;
+};
+
+type Collaborator = {
+  userId: string;
+  displayName: string;
+  color: string;
+  currentFileId: string;
+  cursorPosition: CursorPosition | null;
 };
 
 type WorkspaceState = {
@@ -54,6 +78,20 @@ const io = new Server(server, {
   }
 });
 const workspaces = new Map<string, Map<string, WorkspaceFile>>();
+const collaborators = new Map<string, Map<string, Collaborator>>();
+const socketWorkspaces = new Map<string, string>();
+let userCount = 0;
+
+const collaboratorColors = [
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#06b6d4",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899"
+];
 
 function getLanguageForFile(fileName: string) {
   if (fileName.endsWith(".ts") || fileName.endsWith(".tsx")) {
@@ -115,6 +153,41 @@ function getWorkspaceState(workspaceId: string): WorkspaceState {
   };
 }
 
+function getCollaborators(workspaceId: string) {
+  let workspaceCollaborators = collaborators.get(workspaceId);
+
+  if (!workspaceCollaborators) {
+    workspaceCollaborators = new Map<string, Collaborator>();
+    collaborators.set(workspaceId, workspaceCollaborators);
+  }
+
+  return workspaceCollaborators;
+}
+
+function getCollaboratorState(workspaceId: string) {
+  return {
+    workspaceId,
+    collaborators: Array.from(getCollaborators(workspaceId).values())
+  };
+}
+
+function broadcastCollaborators(workspaceId: string) {
+  io.to(workspaceId).emit("collaborators-state", getCollaboratorState(workspaceId));
+}
+
+function createCollaborator(workspaceId: string, userId: string): Collaborator {
+  const files = Array.from(getWorkspaceFiles(workspaceId).values());
+  userCount += 1;
+
+  return {
+    userId,
+    displayName: `User ${userCount}`,
+    color: collaboratorColors[Math.floor(Math.random() * collaboratorColors.length)],
+    currentFileId: files[0]?.fileId ?? "main.ts",
+    cursorPosition: null
+  };
+}
+
 function createWorkspaceFile({ workspaceId, fileName }: CreateFilePayload) {
   const files = getWorkspaceFiles(workspaceId);
   const fileId = randomUUID();
@@ -166,10 +239,18 @@ app.get("/health", (_request, response) => {
 io.on("connection", (socket) => {
   socket.on("join-workspace", ({ workspaceId }: JoinWorkspacePayload) => {
     socket.join(workspaceId);
+    socketWorkspaces.set(socket.id, workspaceId);
+
+    const workspaceCollaborators = getCollaborators(workspaceId);
+    workspaceCollaborators.set(
+      socket.id,
+      createCollaborator(workspaceId, socket.id)
+    );
 
     // Join sync: every tab receives the full in-memory workspace snapshot so
     // late joiners get all file names and contents before editing.
     socket.emit("workspace-state", getWorkspaceState(workspaceId));
+    broadcastCollaborators(workspaceId);
   });
 
   socket.on("create-file", (payload: CreateFilePayload) => {
@@ -197,6 +278,31 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on("file-selected", ({ workspaceId, fileId }: FileSelectedPayload) => {
+    const collaborator = getCollaborators(workspaceId).get(socket.id);
+
+    if (!collaborator) {
+      return;
+    }
+
+    // Awareness sync: file selection is presence metadata, separate from code.
+    collaborator.currentFileId = fileId;
+    collaborator.cursorPosition = null;
+    broadcastCollaborators(workspaceId);
+  });
+
+  socket.on("cursor-change", (payload: CursorChangePayload) => {
+    const collaborator = getCollaborators(payload.workspaceId).get(socket.id);
+
+    if (!collaborator) {
+      return;
+    }
+
+    collaborator.currentFileId = payload.fileId;
+    collaborator.cursorPosition = payload.cursorPosition;
+    broadcastCollaborators(payload.workspaceId);
+  });
+
   socket.on("code-change", (payload: CodeChangePayload) => {
     const file = updateWorkspaceFile(payload);
 
@@ -211,6 +317,18 @@ io.on("connection", (socket) => {
       fileId: payload.fileId,
       code: file.content
     });
+  });
+
+  socket.on("disconnect", () => {
+    const workspaceId = socketWorkspaces.get(socket.id);
+
+    if (!workspaceId) {
+      return;
+    }
+
+    getCollaborators(workspaceId).delete(socket.id);
+    socketWorkspaces.delete(socket.id);
+    broadcastCollaborators(workspaceId);
   });
 });
 

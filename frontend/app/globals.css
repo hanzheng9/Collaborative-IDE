@@ -135,6 +135,78 @@ body {
   opacity: 0.45;
 }
 
+.collaboratorsPanel {
+  border-top: 1px solid #252b36;
+}
+
+.sidebarHeader.compact {
+  border-bottom: 0;
+  padding-bottom: 8px;
+}
+
+.collaboratorList {
+  display: flex;
+  max-height: 220px;
+  flex-direction: column;
+  gap: 4px;
+  overflow: auto;
+  padding: 0 10px 10px;
+}
+
+.collaboratorItem {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #d7deea;
+  cursor: pointer;
+  font: inherit;
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.collaboratorItem:hover {
+  background: #1b222e;
+}
+
+.collaboratorItem.self {
+  background: #18202c;
+}
+
+.collaboratorDot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+.collaboratorText {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.collaboratorText span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collaboratorText span:first-child {
+  color: #f5f7fb;
+  font-size: 13px;
+}
+
+.collaboratorText span:last-child {
+  color: #aab3c2;
+  font-size: 12px;
+}
+
 .editorShell {
   min-width: 0;
   min-height: 0;
@@ -147,4 +219,26 @@ body {
   justify-content: center;
   color: #aab3c2;
   font-size: 14px;
+}
+
+.remoteCursor {
+  position: relative;
+}
+
+.remoteCursor::after {
+  position: absolute;
+  z-index: 10;
+  top: -18px;
+  left: -2px;
+  border-radius: 4px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 5px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.jumpLineHighlight {
+  background: rgba(59, 130, 246, 0.22);
 }

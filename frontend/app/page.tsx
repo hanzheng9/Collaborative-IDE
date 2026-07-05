@@ -37,17 +37,44 @@ type FileRenamedPayload = {
   file: WorkspaceFile;
 };
 
+type CursorPosition = {
+  lineNumber: number;
+  column: number;
+};
+
+type Collaborator = {
+  userId: string;
+  displayName: string;
+  color: string;
+  currentFileId: string;
+  cursorPosition: CursorPosition | null;
+};
+
+type CollaboratorsStatePayload = {
+  workspaceId: string;
+  collaborators: Collaborator[];
+};
+
 const workspaceId = "demo";
 const backendUrl = "http://localhost:4000";
+
+function getCollaboratorClassName(userId: string) {
+  return `collaborator-${userId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
 
 export default function Home() {
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const applyingRemoteChangeRef = useRef(false);
   const selectedFileIdRef = useRef<string | null>(null);
+  const remoteCursorDecorationIdsRef = useRef<string[]>([]);
+  const lineHighlightDecorationIdsRef = useRef<string[]>([]);
+  const cursorListenerRef = useRef<{ dispose: () => void } | null>(null);
   const [isMonacoReady, setIsMonacoReady] = useState(false);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [localUserId, setLocalUserId] = useState<string | null>(null);
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
 
   const selectedFile =
     files.find((file) => file.fileId === selectedFileId) ?? null;
@@ -61,6 +88,7 @@ export default function Home() {
     socketRef.current = socket;
 
     socket.on("connect", () => {
+      setLocalUserId(socket.id ?? null);
       socket.emit("join-workspace", { workspaceId });
     });
 
@@ -141,11 +169,32 @@ export default function Home() {
       );
     });
 
+    socket.on("collaborators-state", (payload: CollaboratorsStatePayload) => {
+      if (payload.workspaceId !== workspaceId) {
+        return;
+      }
+
+      setCollaborators(payload.collaborators);
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+
+    if (!socket || !selectedFileId) {
+      return;
+    }
+
+    socket.emit("file-selected", {
+      workspaceId,
+      fileId: selectedFileId
+    });
+  }, [selectedFileId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -175,14 +224,94 @@ export default function Home() {
     applyingRemoteChangeRef.current = false;
   }, [selectedFile]);
 
+  useEffect(() => {
+    const styleId = "collaborator-cursor-styles";
+    let style = document.getElementById(styleId) as HTMLStyleElement | null;
+
+    if (!style) {
+      style = document.createElement("style");
+      style.id = styleId;
+      document.head.appendChild(style);
+    }
+
+    style.textContent = collaborators
+      .map((collaborator) => {
+        const className = getCollaboratorClassName(collaborator.userId);
+
+        return `
+.remoteCursor.${className} {
+  border-left: 2px solid ${collaborator.color};
+}
+.remoteCursor.${className}::after {
+  background: ${collaborator.color};
+  color: #ffffff;
+  content: "${collaborator.displayName}";
+}`;
+      })
+      .join("\n");
+  }, [collaborators]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+
+    if (!editor || !selectedFileId) {
+      return;
+    }
+
+    const decorations = collaborators
+      .filter(
+        (collaborator) =>
+          collaborator.userId !== localUserId &&
+          collaborator.currentFileId === selectedFileId &&
+          collaborator.cursorPosition
+      )
+      .map((collaborator) => ({
+        range: {
+          startLineNumber: collaborator.cursorPosition?.lineNumber ?? 1,
+          startColumn: collaborator.cursorPosition?.column ?? 1,
+          endLineNumber: collaborator.cursorPosition?.lineNumber ?? 1,
+          endColumn: collaborator.cursorPosition?.column ?? 1
+        },
+        options: {
+          className: `remoteCursor ${getCollaboratorClassName(
+            collaborator.userId
+          )}`,
+          hoverMessage: { value: collaborator.displayName }
+        }
+      }));
+
+    remoteCursorDecorationIdsRef.current = editor.deltaDecorations(
+      remoteCursorDecorationIdsRef.current,
+      decorations
+    );
+  }, [collaborators, localUserId, selectedFileId]);
+
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor;
+    cursorListenerRef.current?.dispose();
 
     if (selectedFile) {
       applyingRemoteChangeRef.current = true;
       editor.setValue(selectedFile.content);
       applyingRemoteChangeRef.current = false;
     }
+
+    cursorListenerRef.current = editor.onDidChangeCursorPosition((event) => {
+      const fileId = selectedFileIdRef.current;
+
+      if (!fileId) {
+        return;
+      }
+
+      socketRef.current?.emit("cursor-change", {
+        workspaceId,
+        fileId,
+        cursorPosition: {
+          lineNumber: event.position.lineNumber,
+          column: event.position.column
+        }
+      });
+    });
   };
 
   const handleEditorChange: OnChange = (value) => {
@@ -238,6 +367,57 @@ export default function Home() {
     });
   };
 
+  const getFileName = (fileId: string) =>
+    files.find((file) => file.fileId === fileId)?.fileName ?? fileId;
+
+  const handleJumpToCollaborator = (collaborator: Collaborator) => {
+    const cursorPosition = collaborator.cursorPosition;
+
+    if (!cursorPosition) {
+      setSelectedFileId(collaborator.currentFileId);
+      return;
+    }
+
+    setSelectedFileId(collaborator.currentFileId);
+
+    window.setTimeout(() => {
+      const editor = editorRef.current;
+
+      if (!editor) {
+        return;
+      }
+
+      editor.revealPositionInCenter(cursorPosition);
+      editor.setPosition(cursorPosition);
+      editor.focus();
+
+      lineHighlightDecorationIdsRef.current = editor.deltaDecorations(
+        lineHighlightDecorationIdsRef.current,
+        [
+          {
+            range: {
+              startLineNumber: cursorPosition.lineNumber,
+              startColumn: 1,
+              endLineNumber: cursorPosition.lineNumber,
+              endColumn: 1
+            },
+            options: {
+              isWholeLine: true,
+              className: "jumpLineHighlight"
+            }
+          }
+        ]
+      );
+
+      window.setTimeout(() => {
+        lineHighlightDecorationIdsRef.current = editor.deltaDecorations(
+          lineHighlightDecorationIdsRef.current,
+          []
+        );
+      }, 1200);
+    }, 80);
+  };
+
   return (
     <main className="page">
       <header className="topbar">
@@ -282,6 +462,37 @@ export default function Home() {
           >
             Rename
           </button>
+
+          <div className="collaboratorsPanel">
+            <div className="sidebarHeader compact">
+              <span>Collaborators</span>
+              <span>{collaborators.length}</span>
+            </div>
+
+            <div className="collaboratorList">
+              {collaborators.map((collaborator) => (
+                <button
+                  className={
+                    collaborator.userId === localUserId
+                      ? "collaboratorItem self"
+                      : "collaboratorItem"
+                  }
+                  key={collaborator.userId}
+                  type="button"
+                  onClick={() => handleJumpToCollaborator(collaborator)}
+                >
+                  <span
+                    className="collaboratorDot"
+                    style={{ backgroundColor: collaborator.color }}
+                  />
+                  <span className="collaboratorText">
+                    <span>{collaborator.displayName}</span>
+                    <span>{getFileName(collaborator.currentFileId)}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         </aside>
 
         <section className="editorShell" aria-label="Code editor">
