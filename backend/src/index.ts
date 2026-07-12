@@ -2,7 +2,7 @@ import cors from "cors";
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
-import { Server } from "socket.io";
+import { Server, type Socket } from "socket.io";
 import {
   createWorkspace,
   isDatabaseConfigured,
@@ -109,28 +109,58 @@ const collaboratorColors = [
 ];
 
 function getLanguageForFile(fileName: string) {
-  if (fileName.endsWith(".ts") || fileName.endsWith(".tsx")) {
+  const normalizedName = fileName.toLowerCase();
+
+  if (normalizedName.endsWith(".ts") || normalizedName.endsWith(".tsx")) {
     return "typescript";
   }
 
-  if (fileName.endsWith(".js") || fileName.endsWith(".jsx")) {
+  if (normalizedName.endsWith(".js") || normalizedName.endsWith(".jsx")) {
     return "javascript";
   }
 
-  if (fileName.endsWith(".json")) {
+  if (normalizedName.endsWith(".py")) {
+    return "python";
+  }
+
+  if (normalizedName.endsWith(".java")) {
+    return "java";
+  }
+
+  if (normalizedName.endsWith(".go")) {
+    return "go";
+  }
+
+  if (normalizedName.endsWith(".c")) {
+    return "c";
+  }
+
+  if (
+    normalizedName.endsWith(".cpp") ||
+    normalizedName.endsWith(".cc") ||
+    normalizedName.endsWith(".cxx")
+  ) {
+    return "cpp";
+  }
+
+  if (normalizedName.endsWith(".json")) {
     return "json";
   }
 
-  if (fileName.endsWith(".css")) {
+  if (normalizedName.endsWith(".css")) {
     return "css";
   }
 
-  if (fileName.endsWith(".html")) {
+  if (normalizedName.endsWith(".html")) {
     return "html";
   }
 
-  if (fileName.endsWith(".md")) {
+  if (normalizedName.endsWith(".md")) {
     return "markdown";
+  }
+
+  if (normalizedName.endsWith(".sql")) {
+    return "sql";
   }
 
   return "plaintext";
@@ -156,6 +186,20 @@ function isValidId(value: string) {
 
 function toWorkspaceFileMap(files: WorkspaceFile[]) {
   return new Map(files.map((file) => [file.fileId, file]));
+}
+
+function hasDuplicateFileName(
+  files: Map<string, WorkspaceFile>,
+  fileName: string,
+  currentFileId?: string
+) {
+  const normalizedName = fileName.trim().toLowerCase();
+
+  return Array.from(files.values()).some(
+    (file) =>
+      file.fileId !== currentFileId &&
+      file.fileName.trim().toLowerCase() === normalizedName
+  );
 }
 
 async function loadWorkspaceIntoMemory(workspaceId: string) {
@@ -291,6 +335,10 @@ function renameWorkspaceFile({ workspaceId, fileId, fileName }: RenameFilePayloa
   return file;
 }
 
+function emitFileOperationError(socket: Socket, message: string) {
+  socket.emit("file-operation-error", { message });
+}
+
 function updateWorkspaceFile({ workspaceId, fileId, code }: CodeChangePayload) {
   const file = getWorkspaceFiles(workspaceId).get(fileId);
 
@@ -391,6 +439,14 @@ io.on("connection", (socket) => {
 
   socket.on("create-file", (payload: CreateFilePayload) => {
     if (!isValidId(payload.workspaceId) || !isValidId(payload.fileName)) {
+      emitFileOperationError(socket, "Enter a valid filename.");
+      return;
+    }
+
+    const files = getWorkspaceFiles(payload.workspaceId);
+
+    if (hasDuplicateFileName(files, payload.fileName)) {
+      emitFileOperationError(socket, "A file with that name already exists.");
       return;
     }
 
@@ -415,6 +471,19 @@ io.on("connection", (socket) => {
       !isValidId(payload.fileId) ||
       !isValidId(payload.fileName)
     ) {
+      emitFileOperationError(socket, "Enter a valid filename.");
+      return;
+    }
+
+    const files = getWorkspaceFiles(payload.workspaceId);
+
+    if (!files.has(payload.fileId)) {
+      emitFileOperationError(socket, "The selected file no longer exists.");
+      return;
+    }
+
+    if (hasDuplicateFileName(files, payload.fileName, payload.fileId)) {
+      emitFileOperationError(socket, "A file with that name already exists.");
       return;
     }
 

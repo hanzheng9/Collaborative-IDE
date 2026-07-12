@@ -1,95 +1,151 @@
 "use client";
 
-import Editor, {
-  loader,
-  type OnChange,
-  type OnMount
-} from "@monaco-editor/react";
+import { loader, type OnChange, type OnMount } from "@monaco-editor/react";
 import { useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
-
-type CodeChangePayload = {
-  workspaceId: string;
-  fileId: string;
-  code: string;
-};
-
-type WorkspaceFile = {
-  fileId: string;
-  fileName: string;
-  language: string;
-  content: string;
-};
-
-type WorkspaceStatePayload = {
-  workspaceId: string;
-  files: WorkspaceFile[];
-};
-
-type FileCreatedPayload = {
-  workspaceId: string;
-  file: WorkspaceFile;
-  createdBy: string;
-};
-
-type FileRenamedPayload = {
-  workspaceId: string;
-  file: WorkspaceFile;
-};
-
-type CursorPosition = {
-  lineNumber: number;
-  column: number;
-};
-
-type Collaborator = {
-  userId: string;
-  displayName: string;
-  color: string;
-  currentFileId: string;
-  cursorPosition: CursorPosition | null;
-};
-
-type CollaboratorsStatePayload = {
-  workspaceId: string;
-  collaborators: Collaborator[];
-};
+import { CodeEditor } from "./components/CodeEditor";
+import { CollaboratorList } from "./components/CollaboratorList";
+import { ConnectionStatus } from "./components/ConnectionStatus";
+import { FileDialog } from "./components/FileDialog";
+import { FileSidebar } from "./components/FileSidebar";
+import type {
+  CodeChangePayload,
+  Collaborator,
+  CollaboratorsStatePayload,
+  ConnectionStatusValue,
+  FileCreatedPayload,
+  FileOperationErrorPayload,
+  FileRenamedPayload,
+  SyncStatusValue,
+  WorkspaceFile,
+  WorkspaceStatePayload
+} from "./types";
 
 const workspaceId = "demo";
 const backendUrl = "http://localhost:4000";
+
+type EditorInstance = Parameters<OnMount>[0];
+type EditorViewState = ReturnType<EditorInstance["saveViewState"]>;
+type FileDialogState =
+  | { mode: "create" }
+  | { mode: "rename"; file: WorkspaceFile }
+  | null;
 
 function getCollaboratorClassName(userId: string) {
   return `collaborator-${userId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
 export default function Home() {
-  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const editorRef = useRef<EditorInstance | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const applyingRemoteChangeRef = useRef(false);
   const selectedFileIdRef = useRef<string | null>(null);
   const remoteCursorDecorationIdsRef = useRef<string[]>([]);
   const lineHighlightDecorationIdsRef = useRef<string[]>([]);
   const cursorListenerRef = useRef<{ dispose: () => void } | null>(null);
+  const editorViewStatesRef = useRef(new Map<string, EditorViewState>());
+  const syncTimerRef = useRef<number | null>(null);
+  const jumpTargetRef = useRef<Collaborator | null>(null);
   const [isMonacoReady, setIsMonacoReady] = useState(false);
+  const [isWorkspaceLoaded, setIsWorkspaceLoaded] = useState(false);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [localUserId, setLocalUserId] = useState<string | null>(null);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [connectionStatus, setConnectionStatus] =
+    useState<ConnectionStatusValue>("connecting");
+  const [syncStatus, setSyncStatus] = useState<SyncStatusValue>("syncing");
+  const [fileDialog, setFileDialog] = useState<FileDialogState>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState("");
 
   const selectedFile =
     files.find((file) => file.fileId === selectedFileId) ?? null;
+
+  const showFeedback = (message: string) => {
+    setFeedbackMessage(message);
+    window.setTimeout(() => {
+      setFeedbackMessage("");
+    }, 3500);
+  };
+
+  const markSyncedSoon = () => {
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+    }
+
+    setSyncStatus("syncing");
+    syncTimerRef.current = window.setTimeout(() => {
+      setSyncStatus(
+        socketRef.current?.connected ? "synced" : "connection-lost"
+      );
+    }, 350);
+  };
+
+  const saveCurrentViewState = () => {
+    const editor = editorRef.current;
+    const fileId = selectedFileIdRef.current;
+
+    if (!editor || !fileId) {
+      return;
+    }
+
+    editorViewStatesRef.current.set(fileId, editor.saveViewState());
+  };
+
+  const selectFile = (fileId: string) => {
+    saveCurrentViewState();
+    setSelectedFileId(fileId);
+  };
+
+  const applyEditorContent = (code: string) => {
+    const editor = editorRef.current;
+
+    if (!editor || editor.getValue() === code) {
+      return;
+    }
+
+    const viewState = editor.saveViewState();
+    const position = editor.getPosition();
+
+    applyingRemoteChangeRef.current = true;
+    editor.setValue(code);
+
+    if (viewState) {
+      editor.restoreViewState(viewState);
+    }
+
+    if (position) {
+      editor.setPosition(position);
+    }
+
+    applyingRemoteChangeRef.current = false;
+  };
 
   useEffect(() => {
     selectedFileIdRef.current = selectedFileId;
   }, [selectedFileId]);
 
   useEffect(() => {
-    const socket = io(backendUrl);
+    const socket = io(backendUrl, {
+      reconnection: true
+    });
     socketRef.current = socket;
 
     socket.on("connect", () => {
+      setConnectionStatus("connected");
+      setSyncStatus("syncing");
       setLocalUserId(socket.id ?? null);
       socket.emit("join-workspace", { workspaceId });
+    });
+
+    socket.io.on("reconnect_attempt", () => {
+      setConnectionStatus("reconnecting");
+      setSyncStatus("connection-lost");
+    });
+
+    socket.on("disconnect", () => {
+      setConnectionStatus("disconnected");
+      setSyncStatus("connection-lost");
     });
 
     socket.on("workspace-state", (payload: WorkspaceStatePayload) => {
@@ -97,8 +153,9 @@ export default function Home() {
         return;
       }
 
-      // Initial sync: load every file from the server before the user edits.
       setFiles(payload.files);
+      setIsWorkspaceLoaded(true);
+      setSyncStatus("synced");
       setSelectedFileId((currentFileId) => {
         const currentStillExists = payload.files.some(
           (file) => file.fileId === currentFileId
@@ -123,18 +180,11 @@ export default function Home() {
         )
       );
 
-      const editor = editorRef.current;
-      if (
-        !editor ||
-        selectedFileIdRef.current !== payload.fileId ||
-        editor.getValue() === payload.code
-      ) {
-        return;
+      if (selectedFileIdRef.current === payload.fileId) {
+        applyEditorContent(payload.code);
       }
 
-      applyingRemoteChangeRef.current = true;
-      editor.setValue(payload.code);
-      applyingRemoteChangeRef.current = false;
+      setSyncStatus("synced");
     });
 
     socket.on("file-created", (payload: FileCreatedPayload) => {
@@ -155,6 +205,8 @@ export default function Home() {
       if (payload.createdBy === socket.id) {
         setSelectedFileId(payload.file.fileId);
       }
+
+      setSyncStatus("synced");
     });
 
     socket.on("file-renamed", (payload: FileRenamedPayload) => {
@@ -167,6 +219,16 @@ export default function Home() {
           file.fileId === payload.file.fileId ? payload.file : file
         )
       );
+      setSyncStatus("synced");
+    });
+
+    socket.on("file-operation-error", (payload: FileOperationErrorPayload) => {
+      showFeedback(payload.message);
+      setSyncStatus(socket.connected ? "synced" : "connection-lost");
+    });
+
+    socket.on("workspace-error", (payload: FileOperationErrorPayload) => {
+      showFeedback(payload.message);
     });
 
     socket.on("collaborators-state", (payload: CollaboratorsStatePayload) => {
@@ -178,6 +240,7 @@ export default function Home() {
     });
 
     return () => {
+      cursorListenerRef.current?.dispose();
       socket.disconnect();
       socketRef.current = null;
     };
@@ -213,15 +276,11 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const editor = editorRef.current;
-
-    if (!editor || !selectedFile || editor.getValue() === selectedFile.content) {
+    if (!selectedFile) {
       return;
     }
 
-    applyingRemoteChangeRef.current = true;
-    editor.setValue(selectedFile.content);
-    applyingRemoteChangeRef.current = false;
+    applyEditorContent(selectedFile.content);
   }, [selectedFile]);
 
   useEffect(() => {
@@ -293,6 +352,13 @@ export default function Home() {
     if (selectedFile) {
       applyingRemoteChangeRef.current = true;
       editor.setValue(selectedFile.content);
+
+      const savedViewState = editorViewStatesRef.current.get(selectedFile.fileId);
+
+      if (savedViewState) {
+        editor.restoreViewState(savedViewState);
+      }
+
       applyingRemoteChangeRef.current = false;
     }
 
@@ -312,6 +378,13 @@ export default function Home() {
         }
       });
     });
+
+    const jumpTarget = jumpTargetRef.current;
+
+    if (jumpTarget?.cursorPosition) {
+      jumpTargetRef.current = null;
+      window.setTimeout(() => jumpToCursor(jumpTarget), 40);
+    }
   };
 
   const handleEditorChange: OnChange = (value) => {
@@ -320,102 +393,123 @@ export default function Home() {
     }
 
     if (!selectedFileId) {
+      showFeedback("Select a file before editing.");
       return;
     }
 
+    setSyncStatus(
+      socketRef.current?.connected ? "unsaved" : "connection-lost"
+    );
     setFiles((currentFiles) =>
       currentFiles.map((file) =>
         file.fileId === selectedFileId ? { ...file, content: value } : file
       )
     );
 
-    socketRef.current?.emit("code-change", {
+    if (!socketRef.current?.connected) {
+      return;
+    }
+
+    socketRef.current.emit("code-change", {
       workspaceId,
       fileId: selectedFileId,
       code: value
     });
+    markSyncedSoon();
   };
 
-  const handleCreateFile = () => {
-    const fileName = window.prompt("New file name", "untitled.ts");
-
-    if (!fileName) {
+  const handleCreateFile = (fileName: string) => {
+    if (!socketRef.current?.connected) {
+      showFeedback("Cannot create a file while disconnected.");
       return;
     }
 
-    socketRef.current?.emit("create-file", {
+    setSyncStatus("syncing");
+    socketRef.current.emit("create-file", {
       workspaceId,
       fileName
     });
+    setFileDialog(null);
   };
 
-  const handleRenameFile = () => {
-    if (!selectedFile) {
+  const handleRenameFile = (fileName: string) => {
+    if (!socketRef.current?.connected || fileDialog?.mode !== "rename") {
+      showFeedback("Cannot rename this file right now.");
       return;
     }
 
-    const fileName = window.prompt("Rename file", selectedFile.fileName);
-
-    if (!fileName || fileName === selectedFile.fileName) {
-      return;
-    }
-
-    socketRef.current?.emit("rename-file", {
+    setSyncStatus("syncing");
+    socketRef.current.emit("rename-file", {
       workspaceId,
-      fileId: selectedFile.fileId,
+      fileId: fileDialog.file.fileId,
       fileName
     });
+    setFileDialog(null);
   };
-
-  const getFileName = (fileId: string) =>
-    files.find((file) => file.fileId === fileId)?.fileName ?? fileId;
 
   const handleJumpToCollaborator = (collaborator: Collaborator) => {
     const cursorPosition = collaborator.cursorPosition;
+    const fileExists = files.some(
+      (file) => file.fileId === collaborator.currentFileId
+    );
 
-    if (!cursorPosition) {
-      setSelectedFileId(collaborator.currentFileId);
+    if (!fileExists) {
+      showFeedback("That collaborator's file is not available.");
       return;
     }
 
-    setSelectedFileId(collaborator.currentFileId);
+    if (!cursorPosition) {
+      selectFile(collaborator.currentFileId);
+      showFeedback("That collaborator has not placed their cursor yet.");
+      return;
+    }
+
+    jumpTargetRef.current = collaborator;
+    selectFile(collaborator.currentFileId);
+    window.setTimeout(() => jumpToCursor(collaborator), 90);
+  };
+
+  const jumpToCursor = (collaborator: Collaborator) => {
+    const cursorPosition = collaborator.cursorPosition;
+    const editor = editorRef.current;
+
+    if (!editor || !cursorPosition) {
+      return;
+    }
+
+    editor.revealPositionInCenter(cursorPosition);
+    editor.setPosition(cursorPosition);
+    editor.focus();
+
+    lineHighlightDecorationIdsRef.current = editor.deltaDecorations(
+      lineHighlightDecorationIdsRef.current,
+      [
+        {
+          range: {
+            startLineNumber: cursorPosition.lineNumber,
+            startColumn: 1,
+            endLineNumber: cursorPosition.lineNumber,
+            endColumn: 1
+          },
+          options: {
+            isWholeLine: true,
+            className: "jumpLineHighlight"
+          }
+        }
+      ]
+    );
 
     window.setTimeout(() => {
-      const editor = editorRef.current;
-
-      if (!editor) {
+      if (!editorRef.current) {
         return;
       }
 
-      editor.revealPositionInCenter(cursorPosition);
-      editor.setPosition(cursorPosition);
-      editor.focus();
-
-      lineHighlightDecorationIdsRef.current = editor.deltaDecorations(
-        lineHighlightDecorationIdsRef.current,
-        [
-          {
-            range: {
-              startLineNumber: cursorPosition.lineNumber,
-              startColumn: 1,
-              endLineNumber: cursorPosition.lineNumber,
-              endColumn: 1
-            },
-            options: {
-              isWholeLine: true,
-              className: "jumpLineHighlight"
-            }
-          }
-        ]
-      );
-
-      window.setTimeout(() => {
-        lineHighlightDecorationIdsRef.current = editor.deltaDecorations(
+      lineHighlightDecorationIdsRef.current =
+        editorRef.current.deltaDecorations(
           lineHighlightDecorationIdsRef.current,
           []
         );
-      }, 1200);
-    }, 80);
+    }, 1200);
   };
 
   return (
@@ -428,97 +522,68 @@ export default function Home() {
             {selectedFile ? ` / ${selectedFile.fileName}` : ""}
           </p>
         </div>
+        <ConnectionStatus
+          connectionStatus={connectionStatus}
+          syncStatus={syncStatus}
+        />
       </header>
 
+      {feedbackMessage ? (
+        <div className="feedbackBanner" role="status">
+          {feedbackMessage}
+        </div>
+      ) : null}
+
       <div className="workspace">
-        <aside className="sidebar" aria-label="Workspace files">
-          <div className="sidebarHeader">
-            <span>Files</span>
-            <button type="button" onClick={handleCreateFile}>
-              New
-            </button>
-          </div>
+        <aside className="sidebar">
+          <FileSidebar
+            files={files}
+            selectedFileId={selectedFileId}
+            onCreateFile={() => setFileDialog({ mode: "create" })}
+            onRenameFile={() => {
+              if (!selectedFile) {
+                showFeedback("Select a file to rename.");
+                return;
+              }
 
-          <nav className="fileList">
-            {files.map((file) => (
-              <button
-                className={
-                  file.fileId === selectedFileId ? "fileItem active" : "fileItem"
-                }
-                key={file.fileId}
-                type="button"
-                onClick={() => setSelectedFileId(file.fileId)}
-              >
-                {file.fileName}
-              </button>
-            ))}
-          </nav>
+              setFileDialog({ mode: "rename", file: selectedFile });
+            }}
+            onSelectFile={selectFile}
+          />
 
-          <button
-            className="renameButton"
-            type="button"
-            disabled={!selectedFile}
-            onClick={handleRenameFile}
-          >
-            Rename
-          </button>
-
-          <div className="collaboratorsPanel">
-            <div className="sidebarHeader compact">
-              <span>Collaborators</span>
-              <span>{collaborators.length}</span>
-            </div>
-
-            <div className="collaboratorList">
-              {collaborators.map((collaborator) => (
-                <button
-                  className={
-                    collaborator.userId === localUserId
-                      ? "collaboratorItem self"
-                      : "collaboratorItem"
-                  }
-                  key={collaborator.userId}
-                  type="button"
-                  onClick={() => handleJumpToCollaborator(collaborator)}
-                >
-                  <span
-                    className="collaboratorDot"
-                    style={{ backgroundColor: collaborator.color }}
-                  />
-                  <span className="collaboratorText">
-                    <span>{collaborator.displayName}</span>
-                    <span>{getFileName(collaborator.currentFileId)}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+          <CollaboratorList
+            collaborators={collaborators}
+            files={files}
+            localUserId={localUserId}
+            onJumpToCollaborator={handleJumpToCollaborator}
+          />
         </aside>
 
         <section className="editorShell" aria-label="Code editor">
-          {isMonacoReady && selectedFile ? (
-            <Editor
-              key={`${selectedFile.fileId}-${selectedFile.language}`}
-              height="100%"
-              defaultLanguage={selectedFile.language}
-              defaultValue={selectedFile.content}
+          {!isWorkspaceLoaded && connectionStatus !== "disconnected" ? (
+            <div className="editorLoading">Loading workspace...</div>
+          ) : (
+            <CodeEditor
+              isMonacoReady={isMonacoReady}
+              selectedFile={selectedFile}
               onMount={handleEditorMount}
               onChange={handleEditorChange}
-              loading={<div className="editorLoading">Loading editor...</div>}
-              theme="vs-dark"
-              options={{
-                fontSize: 14,
-                minimap: { enabled: false },
-                padding: { top: 16 },
-                scrollBeyondLastLine: false,
-                wordWrap: "on"
-              }}
             />
-          ) : (
-            <div className="editorLoading">Loading workspace...</div>
           )}
         </section>
       </div>
+
+      {fileDialog ? (
+        <FileDialog
+          files={files}
+          initialValue={fileDialog.mode === "rename" ? fileDialog.file.fileName : ""}
+          mode={fileDialog.mode}
+          onCancel={() => setFileDialog(null)}
+          onSubmit={
+            fileDialog.mode === "create" ? handleCreateFile : handleRenameFile
+          }
+        />
+      ) : null}
     </main>
   );
 }

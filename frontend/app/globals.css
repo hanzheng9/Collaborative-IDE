@@ -27,6 +27,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   border-bottom: 1px solid #252b36;
   padding: 20px 24px;
   background: #171b22;
@@ -45,12 +46,59 @@ body {
   font-size: 14px;
 }
 
+.statusGroup {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.statusPill {
+  border: 1px solid #364255;
+  border-radius: 999px;
+  color: #d7deea;
+  font-size: 12px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.statusPill.connected,
+.statusPill.synced {
+  border-color: #246b43;
+  background: #12291c;
+  color: #8ee0a8;
+}
+
+.statusPill.connecting,
+.statusPill.reconnecting,
+.statusPill.syncing,
+.statusPill.unsaved {
+  border-color: #796224;
+  background: #2b2411;
+  color: #f2d27a;
+}
+
+.statusPill.disconnected,
+.statusPill.connection-lost {
+  border-color: #7c2d2d;
+  background: #2a1517;
+  color: #f3a2a2;
+}
+
+.feedbackBanner {
+  border-bottom: 1px solid #3d3145;
+  background: #211827;
+  color: #f0d9ff;
+  font-size: 13px;
+  padding: 10px 24px;
+}
+
 .workspace {
   display: grid;
   height: calc(100vh - 98px);
   min-height: 0;
   flex: 1;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
 }
 
 .sidebar {
@@ -101,7 +149,11 @@ body {
 }
 
 .fileItem {
+  display: flex;
   width: 100%;
+  min-height: 38px;
+  align-items: center;
+  gap: 9px;
   overflow: hidden;
   border: 0;
   border-radius: 6px;
@@ -124,6 +176,24 @@ body {
 .fileItem.active {
   background: #263246;
   color: #ffffff;
+}
+
+.fileIcon {
+  width: 30px;
+  flex: 0 0 auto;
+  border: 1px solid #364255;
+  border-radius: 5px;
+  color: #93a4bd;
+  font-size: 10px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.fileName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .renameButton {
@@ -207,6 +277,13 @@ body {
   font-size: 12px;
 }
 
+.emptyState {
+  margin: 8px;
+  color: #7f8a9b;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .editorShell {
   min-width: 0;
   min-height: 0;
@@ -241,4 +318,105 @@ body {
 
 .jumpLineHighlight {
   background: rgba(59, 130, 246, 0.22);
+}
+
+.dialogBackdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 7, 12, 0.62);
+  padding: 24px;
+}
+
+.fileDialog {
+  width: min(420px, 100%);
+  border: 1px solid #364255;
+  border-radius: 8px;
+  background: #171b22;
+  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.42);
+  padding: 18px;
+}
+
+.fileDialog h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+.fileDialog label {
+  display: block;
+  margin-bottom: 7px;
+  color: #aab3c2;
+  font-size: 13px;
+}
+
+.fileDialog input {
+  width: 100%;
+  border: 1px solid #364255;
+  border-radius: 6px;
+  outline: none;
+  background: #101318;
+  color: #f5f7fb;
+  font: inherit;
+  padding: 10px 11px;
+}
+
+.fileDialog input:focus {
+  border-color: #4c7dff;
+}
+
+.dialogError {
+  margin: 8px 0 0;
+  color: #f3a2a2;
+  font-size: 13px;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.dialogActions button {
+  border: 1px solid #364255;
+  border-radius: 6px;
+  background: #202838;
+  color: #f5f7fb;
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 12px;
+}
+
+.dialogActions button[type="submit"] {
+  border-color: #315bb8;
+  background: #24458f;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .statusGroup {
+    justify-content: flex-start;
+  }
+
+  .workspace {
+    height: calc(100vh - 136px);
+    grid-template-columns: minmax(170px, 38vw) minmax(0, 1fr);
+  }
+
+  .sidebarHeader {
+    padding: 10px;
+  }
+
+  .fileList,
+  .collaboratorList {
+    padding-inline: 8px;
+  }
 }
