@@ -102,6 +102,39 @@ Expected response:
 }
 ```
 
+## Automated Tests
+
+Run the full automated test suite:
+
+```bash
+npm test
+```
+
+Run one side at a time:
+
+```bash
+npm run test:backend
+npm run test:frontend
+```
+
+Run coverage:
+
+```bash
+npm run test:coverage
+```
+
+The current tests cover:
+
+- Workspace state logic
+- Filename validation
+- Language detection
+- Collaborator presence state
+- Express `/health`
+- Socket.io collaboration flows
+- File sidebar behavior
+- File dialog validation and keyboard behavior
+- Collaborator list rendering and click handling
+
 ## Multi-Tab Test
 
 1. Open Tab A, Tab B, and Tab C at `http://localhost:3000`.
