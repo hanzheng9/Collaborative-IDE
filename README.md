@@ -7,9 +7,10 @@ A full-stack collaborative code editor skeleton with real-time multi-file synchr
 - Node.js + Express backend
 - Socket.io room-based synchronization with in-memory workspace state
 - Active collaborator list with file and cursor awareness
+- PostgreSQL persistence for workspaces and files
 - Backend `/health` endpoint
 
-Authentication, AI features, permissions, and PostgreSQL integration are intentionally not implemented yet.
+Authentication, AI features, and permissions are intentionally not implemented yet.
 
 ## Project Structure
 
@@ -38,6 +39,19 @@ Install dependencies from the repository root:
 
 ```bash
 npm install
+```
+
+Create a PostgreSQL database and set `DATABASE_URL` before starting the backend:
+
+```bash
+export DATABASE_URL="postgres://USER:PASSWORD@localhost:5432/collaborative_ide"
+```
+
+The backend creates the required tables automatically on startup. The schema is
+also available at:
+
+```text
+backend/schema.sql
 ```
 
 ## Run the Frontend
@@ -128,3 +142,18 @@ Basic Week 4 test:
 3. Move the cursor in one tab and confirm remote cursors appear in other tabs.
 4. Click another collaborator to jump to their current file and cursor line.
 5. Close one tab and confirm that collaborator disappears from the others.
+
+## Test PostgreSQL Persistence
+
+With `DATABASE_URL` configured:
+
+1. Start the backend and frontend.
+2. Create and rename several files.
+3. Add different content to each file.
+4. Stop the backend.
+5. Restart the backend.
+6. Refresh the frontend.
+7. Confirm all files, names, languages, and contents are restored.
+
+Collaborator presence and cursor positions are intentionally kept only in memory,
+so they reset when the backend restarts.

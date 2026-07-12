@@ -12,12 +12,14 @@
   "dependencies": {
     "cors": "latest",
     "express": "latest",
+    "pg": "^8.22.0",
     "socket.io": "latest"
   },
   "devDependencies": {
     "@types/cors": "latest",
     "@types/express": "latest",
     "@types/node": "latest",
+    "@types/pg": "^8.20.0",
     "tsx": "latest",
     "typescript": "latest"
   }

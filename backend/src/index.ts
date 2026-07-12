@@ -3,6 +3,15 @@ import express from "express";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
+import {
+  createWorkspace,
+  isDatabaseConfigured,
+  loadWorkspace,
+  migrateDatabase,
+  renameFile,
+  saveFile,
+  saveFileContent
+} from "./database.js";
 
 type CodeChangePayload = {
   workspaceId: string;
@@ -80,7 +89,13 @@ const io = new Server(server, {
 const workspaces = new Map<string, Map<string, WorkspaceFile>>();
 const collaborators = new Map<string, Map<string, Collaborator>>();
 const socketWorkspaces = new Map<string, string>();
+const workspaceLoadPromises = new Map<string, Promise<Map<string, WorkspaceFile>>>();
+const pendingContentWrites = new Map<string, NodeJS.Timeout>();
 let userCount = 0;
+const contentWriteDelayMs = 800;
+const databaseReady = migrateDatabase().catch((error) => {
+  console.error("Failed to initialize PostgreSQL schema:", error);
+});
 
 const collaboratorColors = [
   "#ef4444",
@@ -133,6 +148,65 @@ function createDefaultWorkspace() {
       }
     ]
   ]);
+}
+
+function isValidId(value: string) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function toWorkspaceFileMap(files: WorkspaceFile[]) {
+  return new Map(files.map((file) => [file.fileId, file]));
+}
+
+async function loadWorkspaceIntoMemory(workspaceId: string) {
+  if (!isValidId(workspaceId)) {
+    throw new Error("Invalid workspaceId");
+  }
+
+  const existingFiles = workspaces.get(workspaceId);
+
+  if (existingFiles) {
+    return existingFiles;
+  }
+
+  const existingLoad = workspaceLoadPromises.get(workspaceId);
+
+  if (existingLoad) {
+    return existingLoad;
+  }
+
+  const loadPromise = (async () => {
+    try {
+      await databaseReady;
+      const persistedWorkspace = await loadWorkspace(workspaceId);
+
+      if (persistedWorkspace && persistedWorkspace.files.length > 0) {
+        const files = toWorkspaceFileMap(persistedWorkspace.files);
+        workspaces.set(workspaceId, files);
+        return files;
+      }
+
+      const files = createDefaultWorkspace();
+      workspaces.set(workspaceId, files);
+
+      await createWorkspace(workspaceId, workspaceId, Array.from(files.values()));
+
+      return files;
+    } catch (error) {
+      console.error("Failed to load workspace from PostgreSQL:", error);
+
+      const files = createDefaultWorkspace();
+      workspaces.set(workspaceId, files);
+
+      return files;
+    } finally {
+      workspaceLoadPromises.delete(workspaceId);
+    }
+  })();
+
+  workspaceLoadPromises.set(workspaceId, loadPromise);
+
+  return loadPromise;
 }
 
 function getWorkspaceFiles(workspaceId: string) {
@@ -229,6 +303,61 @@ function updateWorkspaceFile({ workspaceId, fileId, code }: CodeChangePayload) {
   return file;
 }
 
+function getWriteKey(workspaceId: string, fileId: string) {
+  return `${workspaceId}:${fileId}`;
+}
+
+function scheduleContentSave(workspaceId: string, fileId: string) {
+  const writeKey = getWriteKey(workspaceId, fileId);
+  const pendingWrite = pendingContentWrites.get(writeKey);
+
+  if (pendingWrite) {
+    clearTimeout(pendingWrite);
+  }
+
+  pendingContentWrites.set(
+    writeKey,
+    setTimeout(() => {
+      void flushContentSave(workspaceId, fileId);
+    }, contentWriteDelayMs)
+  );
+}
+
+async function flushContentSave(workspaceId: string, fileId: string) {
+  const writeKey = getWriteKey(workspaceId, fileId);
+  pendingContentWrites.delete(writeKey);
+
+  const file = workspaces.get(workspaceId)?.get(fileId);
+
+  if (!file) {
+    return;
+  }
+
+  try {
+    // Read from memory at flush time so a delayed database write cannot save
+    // older content over a newer real-time edit.
+    await saveFileContent(workspaceId, fileId, file.content);
+  } catch (error) {
+    console.error("Failed to persist file content:", error);
+    scheduleContentSave(workspaceId, fileId);
+  }
+}
+
+async function flushPendingWrites() {
+  const pendingWrites = Array.from(pendingContentWrites.keys()).map((writeKey) => {
+    const [workspaceId, fileId] = writeKey.split(":");
+    const pendingWrite = pendingContentWrites.get(writeKey);
+
+    if (pendingWrite) {
+      clearTimeout(pendingWrite);
+    }
+
+    return flushContentSave(workspaceId, fileId);
+  });
+
+  await Promise.allSettled(pendingWrites);
+}
+
 app.use(cors());
 app.use(express.json());
 
@@ -237,7 +366,14 @@ app.get("/health", (_request, response) => {
 });
 
 io.on("connection", (socket) => {
-  socket.on("join-workspace", ({ workspaceId }: JoinWorkspacePayload) => {
+  socket.on("join-workspace", async ({ workspaceId }: JoinWorkspacePayload) => {
+    if (!isValidId(workspaceId)) {
+      socket.emit("workspace-error", { message: "Invalid workspaceId" });
+      return;
+    }
+
+    await loadWorkspaceIntoMemory(workspaceId);
+
     socket.join(workspaceId);
     socketWorkspaces.set(socket.id, workspaceId);
 
@@ -254,7 +390,15 @@ io.on("connection", (socket) => {
   });
 
   socket.on("create-file", (payload: CreateFilePayload) => {
+    if (!isValidId(payload.workspaceId) || !isValidId(payload.fileName)) {
+      return;
+    }
+
     const file = createWorkspaceFile(payload);
+
+    void saveFile(payload.workspaceId, file).catch((error) => {
+      console.error("Failed to persist created file:", error);
+    });
 
     // Server creates the file ID, then broadcasts to every tab including the
     // creator so all clients converge on the same workspace structure.
@@ -266,11 +410,28 @@ io.on("connection", (socket) => {
   });
 
   socket.on("rename-file", (payload: RenameFilePayload) => {
+    if (
+      !isValidId(payload.workspaceId) ||
+      !isValidId(payload.fileId) ||
+      !isValidId(payload.fileName)
+    ) {
+      return;
+    }
+
     const file = renameWorkspaceFile(payload);
 
     if (!file) {
       return;
     }
+
+    void renameFile(
+      payload.workspaceId,
+      payload.fileId,
+      file.fileName,
+      file.language
+    ).catch((error) => {
+      console.error("Failed to persist renamed file:", error);
+    });
 
     io.to(payload.workspaceId).emit("file-renamed", {
       workspaceId: payload.workspaceId,
@@ -279,6 +440,10 @@ io.on("connection", (socket) => {
   });
 
   socket.on("file-selected", ({ workspaceId, fileId }: FileSelectedPayload) => {
+    if (!isValidId(workspaceId) || !isValidId(fileId)) {
+      return;
+    }
+
     const collaborator = getCollaborators(workspaceId).get(socket.id);
 
     if (!collaborator) {
@@ -292,6 +457,10 @@ io.on("connection", (socket) => {
   });
 
   socket.on("cursor-change", (payload: CursorChangePayload) => {
+    if (!isValidId(payload.workspaceId) || !isValidId(payload.fileId)) {
+      return;
+    }
+
     const collaborator = getCollaborators(payload.workspaceId).get(socket.id);
 
     if (!collaborator) {
@@ -304,11 +473,17 @@ io.on("connection", (socket) => {
   });
 
   socket.on("code-change", (payload: CodeChangePayload) => {
+    if (!isValidId(payload.workspaceId) || !isValidId(payload.fileId)) {
+      return;
+    }
+
     const file = updateWorkspaceFile(payload);
 
     if (!file) {
       return;
     }
+
+    scheduleContentSave(payload.workspaceId, payload.fileId);
 
     // Edit sync: save the selected file's new content, then broadcast only to
     // other tabs in the room. Switching files never mutates unrelated files.
@@ -334,4 +509,21 @@ io.on("connection", (socket) => {
 
 server.listen(port, () => {
   console.log(`Backend listening on http://localhost:${port}`);
+  console.log(
+    isDatabaseConfigured()
+      ? "PostgreSQL persistence enabled."
+      : "PostgreSQL persistence disabled. Set DATABASE_URL to enable it."
+  );
+});
+
+process.on("SIGINT", () => {
+  void flushPendingWrites().finally(() => {
+    process.exit(0);
+  });
+});
+
+process.on("SIGTERM", () => {
+  void flushPendingWrites().finally(() => {
+    process.exit(0);
+  });
 });
