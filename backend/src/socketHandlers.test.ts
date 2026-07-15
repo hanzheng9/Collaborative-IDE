@@ -198,6 +198,71 @@ describe("Socket.io collaboration", () => {
     });
   });
 
+  it("broadcasts file deletion and prevents deleting the final file", async () => {
+    const a = client();
+    const b = client();
+    await Promise.all([waitForEvent(a, "connect"), waitForEvent(b, "connect")]);
+    a.emit("join-workspace", { workspaceId: "demo" });
+    b.emit("join-workspace", { workspaceId: "demo" });
+    await Promise.all([
+      waitForEvent(a, "workspace-state"),
+      waitForEvent(b, "workspace-state")
+    ]);
+
+    const createdEvent = waitForEvent<{ file: { fileId: string } }>(
+      b,
+      "file-created"
+    );
+    a.emit("create-file", { workspaceId: "demo", fileName: "delete-me.ts" });
+    const created = await createdEvent;
+
+    const deletedEvent = waitForEvent<{
+      fileId: string;
+      fallbackFileId: string;
+    }>(b, "file-deleted");
+    a.emit("delete-file", {
+      workspaceId: "demo",
+      fileId: created.file.fileId
+    });
+    expect(await deletedEvent).toMatchObject({
+      fileId: created.file.fileId,
+      fallbackFileId: "main.ts"
+    });
+    expect(
+      workspaces
+        .getWorkspaceState("demo")
+        .files.some((file) => file.fileId === created.file.fileId)
+    ).toBe(false);
+
+    const staleCodeChangeError = waitForEvent<{ code: string }>(
+      a,
+      "file-operation-error"
+    );
+    a.emit("code-change", {
+      workspaceId: "demo",
+      fileId: created.file.fileId,
+      code: "stale"
+    });
+    expect(await staleCodeChangeError).toMatchObject({ code: "FILE_NOT_FOUND" });
+    expect(
+      workspaces
+        .getWorkspaceState("demo")
+        .files.some((file) => file.fileId === created.file.fileId)
+    ).toBe(false);
+
+    const finalFileError = waitForEvent<{ code: string }>(
+      a,
+      "file-operation-error"
+    );
+    a.emit("delete-file", {
+      workspaceId: "demo",
+      fileId: "main.ts"
+    });
+    expect(await finalFileError).toMatchObject({
+      code: "CANNOT_DELETE_LAST_FILE"
+    });
+  });
+
   it("syncs collaborators, file selection, cursor updates, and disconnects", async () => {
     const a = client();
     const b = client();

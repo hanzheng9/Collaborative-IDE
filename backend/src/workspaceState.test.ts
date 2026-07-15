@@ -104,6 +104,44 @@ describe("WorkspaceStateStore", () => {
     );
   });
 
+  it("deletes a file by stable fileId and chooses a fallback", () => {
+    let id = 0;
+    const store = new WorkspaceStateStore({
+      generateFileId: () => `file-${++id}`
+    });
+    const first = store.createFile("demo", "first.ts");
+    const second = store.createFile("demo", "second.ts");
+
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+
+    const deleted = store.deleteFile("demo", first.file.fileId);
+
+    expect(deleted).toMatchObject({
+      ok: true,
+      deletedFileId: first.file.fileId,
+      fallbackFileId: second.file.fileId
+    });
+    expect(
+      store.getWorkspaceState("demo").files.some(
+        (file) => file.fileId === first.file.fileId
+      )
+    ).toBe(false);
+  });
+
+  it("prevents deleting the final remaining file", () => {
+    const store = new WorkspaceStateStore();
+
+    expect(store.deleteFile("demo", "main.ts")).toMatchObject({
+      ok: false,
+      code: "CANNOT_DELETE_LAST_FILE"
+    });
+    expect(store.deleteFile("demo", "missing.ts")).toMatchObject({
+      ok: false,
+      code: "FILE_NOT_FOUND"
+    });
+  });
+
   it("returns latest state for later joiners and handles unknown files safely", () => {
     const store = new WorkspaceStateStore();
 

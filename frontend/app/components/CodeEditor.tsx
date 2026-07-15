@@ -4,6 +4,7 @@ import type { WorkspaceFile } from "../types";
 type CodeEditorProps = {
   isMonacoReady: boolean;
   selectedFile: WorkspaceFile | null;
+  readOnly: boolean;
   onChange: OnChange;
   onMount: OnMount;
 };
@@ -11,6 +12,7 @@ type CodeEditorProps = {
 export function CodeEditor({
   isMonacoReady,
   selectedFile,
+  readOnly,
   onChange,
   onMount
 }: CodeEditorProps) {
@@ -40,6 +42,8 @@ export function CodeEditor({
         fontSize: 14,
         minimap: { enabled: false },
         padding: { top: 16 },
+        readOnly,
+        readOnlyMessage: { value: "Reconnect to continue editing." },
         scrollBeyondLastLine: false,
         wordWrap: "on"
       }}

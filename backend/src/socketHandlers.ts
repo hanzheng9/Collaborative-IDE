@@ -1,9 +1,11 @@
 import type { Server, Socket } from "socket.io";
 import { CollaboratorStateStore } from "./collaboratorState.js";
 import type {
+  AppErrorPayload,
   CodeChangePayload,
   CreateFilePayload,
   CursorChangePayload,
+  DeleteFilePayload,
   FileSelectedPayload,
   JoinWorkspacePayload,
   RenameFilePayload,
@@ -31,6 +33,10 @@ export type SocketPersistence = {
   ) => Promise<void>;
 };
 
+type OperationAck =
+  | { ok: true }
+  | { ok: false; error: AppErrorPayload };
+
 type RegisterSocketHandlersOptions = {
   collaborators?: CollaboratorStateStore;
   contentWriteDelayMs?: number;
@@ -42,8 +48,25 @@ function isValidId(value: string) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function emitFileOperationError(socket: Socket, message: string) {
-  socket.emit("file-operation-error", { message });
+function createError(
+  code: AppErrorPayload["code"],
+  message: string,
+  details: Partial<AppErrorPayload> = {}
+): AppErrorPayload {
+  return {
+    code,
+    message,
+    ...details
+  };
+}
+
+function emitFileOperationError(
+  socket: Socket,
+  error: AppErrorPayload,
+  ack?: (payload: OperationAck) => void
+) {
+  socket.emit("file-operation-error", error);
+  ack?.({ ok: false, error });
 }
 
 export function registerSocketHandlers(
@@ -159,7 +182,12 @@ export function registerSocketHandlers(
   io.on("connection", (socket) => {
     socket.on("join-workspace", async ({ workspaceId }: JoinWorkspacePayload) => {
       if (!isValidId(workspaceId)) {
-        socket.emit("workspace-error", { message: "Invalid workspaceId" });
+        socket.emit(
+          "workspace-error",
+          createError("WORKSPACE_NOT_FOUND", "Invalid workspaceId.", {
+            operation: "join-workspace"
+          })
+        );
         return;
       }
 
@@ -174,16 +202,30 @@ export function registerSocketHandlers(
       broadcastCollaborators(workspaceId);
     });
 
-    socket.on("create-file", (payload: CreateFilePayload) => {
+    socket.on("create-file", (payload: CreateFilePayload, ack?: (payload: OperationAck) => void) => {
       if (!isValidId(payload.workspaceId) || !isValidId(payload.fileName)) {
-        emitFileOperationError(socket, "Enter a valid filename.");
+        emitFileOperationError(
+          socket,
+          createError("INVALID_FILENAME", "Enter a valid filename.", {
+            operation: "create-file",
+            workspaceId: payload.workspaceId
+          }),
+          ack
+        );
         return;
       }
 
       const result = workspaces.createFile(payload.workspaceId, payload.fileName);
 
       if (!result.ok) {
-        emitFileOperationError(socket, result.error);
+        emitFileOperationError(
+          socket,
+          createError(result.code, result.error, {
+            operation: "create-file",
+            workspaceId: payload.workspaceId
+          }),
+          ack
+        );
         return;
       }
 
@@ -196,15 +238,24 @@ export function registerSocketHandlers(
         file: result.file,
         createdBy: socket.id
       });
+      ack?.({ ok: true });
     });
 
-    socket.on("rename-file", (payload: RenameFilePayload) => {
+    socket.on("rename-file", (payload: RenameFilePayload, ack?: (payload: OperationAck) => void) => {
       if (
         !isValidId(payload.workspaceId) ||
         !isValidId(payload.fileId) ||
         !isValidId(payload.fileName)
       ) {
-        emitFileOperationError(socket, "Enter a valid filename.");
+        emitFileOperationError(
+          socket,
+          createError("INVALID_FILENAME", "Enter a valid filename.", {
+            operation: "rename-file",
+            workspaceId: payload.workspaceId,
+            fileId: payload.fileId
+          }),
+          ack
+        );
         return;
       }
 
@@ -215,7 +266,15 @@ export function registerSocketHandlers(
       );
 
       if (!result.ok) {
-        emitFileOperationError(socket, result.error);
+        emitFileOperationError(
+          socket,
+          createError(result.code, result.error, {
+            operation: "rename-file",
+            workspaceId: payload.workspaceId,
+            fileId: payload.fileId
+          }),
+          ack
+        );
         return;
       }
 
@@ -234,10 +293,97 @@ export function registerSocketHandlers(
         workspaceId: payload.workspaceId,
         file: result.file
       });
+      ack?.({ ok: true });
+    });
+
+    socket.on("delete-file", (payload: DeleteFilePayload, ack?: (payload: OperationAck) => void) => {
+      if (!isValidId(payload.workspaceId) || !isValidId(payload.fileId)) {
+        emitFileOperationError(
+          socket,
+          createError("FILE_NOT_FOUND", "The selected file no longer exists.", {
+            operation: "delete-file",
+            workspaceId: payload.workspaceId,
+            fileId: payload.fileId
+          }),
+          ack
+        );
+        return;
+      }
+
+      const result = workspaces.deleteFile(payload.workspaceId, payload.fileId);
+
+      if (!result.ok) {
+        emitFileOperationError(
+          socket,
+          createError(result.code, result.error, {
+            operation: "delete-file",
+            workspaceId: payload.workspaceId,
+            fileId: payload.fileId
+          }),
+          ack
+        );
+        return;
+      }
+
+      const pendingWrite = pendingContentWrites.get(
+        getWriteKey(payload.workspaceId, payload.fileId)
+      );
+
+      if (pendingWrite) {
+        clearTimeout(pendingWrite);
+      }
+
+      pendingContentWrites.delete(getWriteKey(payload.workspaceId, payload.fileId));
+
+      const workspaceCollaborators = collaborators.getCollaborators(
+        payload.workspaceId
+      );
+
+      for (const collaborator of workspaceCollaborators) {
+        if (
+          collaborator.currentFileId === payload.fileId &&
+          result.fallbackFileId
+        ) {
+          collaborators.updateCurrentFile(
+            payload.workspaceId,
+            collaborator.userId,
+            result.fallbackFileId
+          );
+        }
+      }
+
+      io.to(payload.workspaceId).emit("file-deleted", {
+        workspaceId: payload.workspaceId,
+        fileId: payload.fileId,
+        fallbackFileId: result.fallbackFileId,
+        deletedBy: socket.id
+      });
+      broadcastCollaborators(payload.workspaceId);
+      ack?.({ ok: true });
     });
 
     socket.on("file-selected", ({ workspaceId, fileId }: FileSelectedPayload) => {
       if (!isValidId(workspaceId) || !isValidId(fileId)) {
+        socket.emit(
+          "file-operation-error",
+          createError("FILE_NOT_FOUND", "The selected file no longer exists.", {
+            operation: "file-selected",
+            workspaceId,
+            fileId
+          })
+        );
+        return;
+      }
+
+      if (!workspaces.getWorkspaceFiles(workspaceId).has(fileId)) {
+        socket.emit(
+          "file-operation-error",
+          createError("FILE_NOT_FOUND", "The selected file no longer exists.", {
+            operation: "file-selected",
+            workspaceId,
+            fileId
+          })
+        );
         return;
       }
 
@@ -250,6 +396,35 @@ export function registerSocketHandlers(
 
     socket.on("cursor-change", (payload: CursorChangePayload) => {
       if (!isValidId(payload.workspaceId) || !isValidId(payload.fileId)) {
+        socket.emit(
+          "file-operation-error",
+          createError("INVALID_CURSOR_POSITION", "Invalid cursor update.", {
+            operation: "cursor-change",
+            workspaceId: payload.workspaceId,
+            fileId: payload.fileId
+          })
+        );
+        return;
+      }
+
+      const hasValidCursor =
+        Number.isInteger(payload.cursorPosition?.lineNumber) &&
+        Number.isInteger(payload.cursorPosition?.column) &&
+        payload.cursorPosition.lineNumber > 0 &&
+        payload.cursorPosition.column > 0;
+
+      if (
+        !hasValidCursor ||
+        !workspaces.getWorkspaceFiles(payload.workspaceId).has(payload.fileId)
+      ) {
+        socket.emit(
+          "file-operation-error",
+          createError("INVALID_CURSOR_POSITION", "Invalid cursor update.", {
+            operation: "cursor-change",
+            workspaceId: payload.workspaceId,
+            fileId: payload.fileId
+          })
+        );
         return;
       }
 
@@ -269,12 +444,28 @@ export function registerSocketHandlers(
 
     socket.on("code-change", (payload: CodeChangePayload) => {
       if (!isValidId(payload.workspaceId) || !isValidId(payload.fileId)) {
+        socket.emit(
+          "file-operation-error",
+          createError("FILE_OPERATION_FAILED", "Invalid code change.", {
+            operation: "code-change",
+            workspaceId: payload.workspaceId,
+            fileId: payload.fileId
+          })
+        );
         return;
       }
 
       const result = workspaces.updateFileContent(payload);
 
       if (!result.ok) {
+        socket.emit(
+          "file-operation-error",
+          createError(result.code, result.error, {
+            operation: "code-change",
+            workspaceId: payload.workspaceId,
+            fileId: payload.fileId
+          })
+        );
         return;
       }
 

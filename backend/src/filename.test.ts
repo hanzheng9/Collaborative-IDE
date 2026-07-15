@@ -22,6 +22,7 @@ describe("validateFileName", () => {
   it.each(["", "   "])("rejects empty filename %j", (fileName) => {
     expect(validateFileName(fileName, files)).toEqual({
       ok: false,
+      code: "INVALID_FILENAME",
       error: "Filename is required."
     });
   });
@@ -29,6 +30,7 @@ describe("validateFileName", () => {
   it("rejects duplicate filenames case-insensitively", () => {
     expect(validateFileName("MAIN.TS", files)).toEqual({
       ok: false,
+      code: "DUPLICATE_FILENAME",
       error: "A file with that name already exists."
     });
   });

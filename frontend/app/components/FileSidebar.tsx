@@ -4,6 +4,7 @@ type FileSidebarProps = {
   files: WorkspaceFile[];
   selectedFileId: string | null;
   onCreateFile: () => void;
+  onDeleteFile: (file: WorkspaceFile) => void;
   onRenameFile: () => void;
   onSelectFile: (fileId: string) => void;
 };
@@ -22,6 +23,7 @@ export function FileSidebar({
   files,
   selectedFileId,
   onCreateFile,
+  onDeleteFile,
   onRenameFile,
   onSelectFile
 }: FileSidebarProps) {
@@ -39,18 +41,31 @@ export function FileSidebar({
           <p className="emptyState">No files yet.</p>
         ) : (
           files.map((file) => (
-            <button
+            <div
               className={
-                file.fileId === selectedFileId ? "fileItem active" : "fileItem"
+                file.fileId === selectedFileId ? "fileRow active" : "fileRow"
               }
               key={file.fileId}
-              title={file.fileName}
-              type="button"
-              onClick={() => onSelectFile(file.fileId)}
             >
-              <span className="fileIcon">{getFileIcon(file.fileName)}</span>
-              <span className="fileName">{file.fileName}</span>
-            </button>
+              <button
+                className="fileItem"
+                title={file.fileName}
+                type="button"
+                onClick={() => onSelectFile(file.fileId)}
+              >
+                <span className="fileIcon">{getFileIcon(file.fileName)}</span>
+                <span className="fileName">{file.fileName}</span>
+              </button>
+              <button
+                aria-label={`Delete ${file.fileName}`}
+                className="fileDeleteButton"
+                title={`Delete ${file.fileName}`}
+                type="button"
+                onClick={() => onDeleteFile(file)}
+              >
+                Delete
+              </button>
+            </div>
           ))
         )}
       </nav>

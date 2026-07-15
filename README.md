@@ -7,8 +7,8 @@ The app supports real-time multi-file editing across browser tabs, collaborator 
 ## Features
 
 - Multi-file workspace in the hardcoded `demo` room
-- Create, rename, and switch files
-- In-app create/rename dialogs with validation
+- Create, rename, delete, and switch files
+- In-app create, rename, and delete confirmation dialogs with validation
 - Duplicate filename feedback
 - Monaco Editor with language detection by file extension
 - Per-file editor view state for cursor and scroll restoration
@@ -18,8 +18,9 @@ The app supports real-time multi-file editing across browser tabs, collaborator 
 - Current-file awareness
 - Remote text cursor decorations
 - Click a collaborator to jump to their file and cursor line
-- Connection status: connecting, connected, disconnected, reconnecting
+- Connection status: connecting, connected, disconnected, reconnecting, reconnection failed
 - Session sync status: synced, syncing, unsynced changes, connection lost
+- Structured Socket.io error feedback for invalid file operations
 
 ## Architecture
 
@@ -30,6 +31,7 @@ frontend/
       CodeEditor.tsx
       CollaboratorList.tsx
       ConnectionStatus.tsx
+      DeleteFileDialog.tsx
       FileDialog.tsx
       FileSidebar.tsx
     page.tsx
@@ -50,6 +52,8 @@ Socket.io events include:
 - `file-created`
 - `rename-file`
 - `file-renamed`
+- `delete-file`
+- `file-deleted`
 - `code-change`
 - `file-selected`
 - `cursor-change`
@@ -132,7 +136,7 @@ The current tests cover:
 - Express `/health`
 - Socket.io collaboration flows
 - File sidebar behavior
-- File dialog validation and keyboard behavior
+- File dialog and delete confirmation behavior
 - Collaborator list rendering and click handling
 
 ## Multi-Tab Test
@@ -143,14 +147,23 @@ The current tests cover:
 4. Confirm all files appear in every tab.
 5. Rename files from different tabs.
 6. Confirm names synchronize correctly.
-7. Add different code to each file.
-8. Switch files repeatedly and confirm content stays separate.
-9. Confirm language mode changes based on extensions such as `.ts`, `.py`, `.json`, `.sql`, and `.md`.
-10. Move the text caret in one tab and confirm remote cursors appear only for users viewing the same file.
-11. Click another collaborator to jump to their current file and cursor.
-12. Close one tab and confirm that collaborator disappears.
-13. Stop the backend and confirm disconnected status appears.
-14. Restart the backend and confirm the frontend reconnects cleanly.
+7. Delete a file and confirm it disappears in every tab.
+8. Try deleting the final file and confirm the app prevents it.
+9. Add different code to each file.
+10. Switch files repeatedly and confirm content stays separate.
+11. Confirm language mode changes based on extensions such as `.ts`, `.py`, `.json`, `.sql`, and `.md`.
+12. Move the text caret in one tab and confirm remote cursors appear only for users viewing the same file.
+13. Click another collaborator to jump to their current file and cursor.
+14. Close one tab and confirm that collaborator disappears.
+15. Stop the backend and confirm disconnected status appears.
+16. Restart the backend and confirm the frontend reconnects cleanly.
+
+## Current Policies
+
+- A workspace must always contain at least one file, so deleting the final file is blocked.
+- While disconnected, Monaco is read-only and edits are paused instead of stored offline.
+- On reconnect, the backend session state is treated as authoritative.
+- Deleted files are removed by stable `fileId`; stale updates for deleted files are rejected.
 
 ## Optional PostgreSQL
 

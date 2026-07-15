@@ -9,7 +9,8 @@ const connectionLabels: Record<ConnectionStatusValue, string> = {
   connecting: "Connecting",
   connected: "Connected",
   disconnected: "Disconnected",
-  reconnecting: "Reconnecting"
+  reconnecting: "Reconnecting",
+  "reconnection-failed": "Reconnection failed"
 };
 
 const syncLabels: Record<SyncStatusValue, string> = {

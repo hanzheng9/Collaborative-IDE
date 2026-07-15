@@ -27,23 +27,22 @@ describe("FileSidebar", () => {
       <FileSidebar
         files={files}
         selectedFileId="main.ts"
+        onDeleteFile={vi.fn()}
         onCreateFile={vi.fn()}
         onRenameFile={vi.fn()}
         onSelectFile={onSelectFile}
       />
     );
 
-    expect(screen.getByRole("button", { name: /main\.ts/i })).toHaveClass(
-      "active"
-    );
+    expect(
+      screen.getByTitle("main.ts").closest(".fileRow")
+    ).toHaveClass("active");
     expect(
       screen.getByTitle("very.long.filename.with.many.parts.ts")
     ).toBeInTheDocument();
 
     await userEvent.click(
-      screen.getByRole("button", {
-        name: /very\.long\.filename\.with\.many\.parts\.ts/i
-      })
+      screen.getByTitle("very.long.filename.with.many.parts.ts")
     );
     expect(onSelectFile).toHaveBeenCalledWith("long-file");
   });
@@ -56,6 +55,7 @@ describe("FileSidebar", () => {
       <FileSidebar
         files={files}
         selectedFileId="main.ts"
+        onDeleteFile={vi.fn()}
         onCreateFile={onCreateFile}
         onRenameFile={onRenameFile}
         onSelectFile={vi.fn()}
@@ -71,11 +71,30 @@ describe("FileSidebar", () => {
     expect(onRenameFile).toHaveBeenCalled();
   });
 
+  it("calls delete action with the target file", async () => {
+    const onDeleteFile = vi.fn();
+
+    render(
+      <FileSidebar
+        files={files}
+        selectedFileId="main.ts"
+        onDeleteFile={onDeleteFile}
+        onCreateFile={vi.fn()}
+        onRenameFile={vi.fn()}
+        onSelectFile={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /delete main\.ts/i }));
+    expect(onDeleteFile).toHaveBeenCalledWith(files[0]);
+  });
+
   it("shows an empty state and disables rename when no file is selected", () => {
     render(
       <FileSidebar
         files={[]}
         selectedFileId={null}
+        onDeleteFile={vi.fn()}
         onCreateFile={vi.fn()}
         onRenameFile={vi.fn()}
         onSelectFile={vi.fn()}

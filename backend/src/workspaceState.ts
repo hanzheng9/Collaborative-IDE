@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { validateFileName } from "./filename.js";
 import { getLanguageForFile } from "./language.js";
-import type { CodeChangePayload, WorkspaceFile, WorkspaceState } from "./types.js";
+import type {
+  AppErrorPayload,
+  CodeChangePayload,
+  WorkspaceFile,
+  WorkspaceState
+} from "./types.js";
+
+type WorkspaceErrorCode = AppErrorPayload["code"];
 
 export const defaultCode = `function greet(name: string) {
   return \`Hello, \${name}!\`;
@@ -90,7 +97,11 @@ export class WorkspaceStateStore {
     const file = files.get(fileId);
 
     if (!file) {
-      return { ok: false as const, error: "The selected file no longer exists." };
+      return {
+        ok: false as const,
+        code: "FILE_NOT_FOUND" as WorkspaceErrorCode,
+        error: "The selected file no longer exists."
+      };
     }
 
     const validation = validateFileName(fileName, files.values(), fileId);
@@ -109,11 +120,49 @@ export class WorkspaceStateStore {
     const file = this.getWorkspaceFiles(workspaceId).get(fileId);
 
     if (!file) {
-      return { ok: false as const, error: "The selected file no longer exists." };
+      return {
+        ok: false as const,
+        code: "FILE_NOT_FOUND" as WorkspaceErrorCode,
+        error: "The selected file no longer exists."
+      };
     }
 
     file.content = code;
 
     return { ok: true as const, file };
+  }
+
+  deleteFile(workspaceId: string, fileId: string) {
+    const files = this.getWorkspaceFiles(workspaceId);
+    const file = files.get(fileId);
+
+    if (!file) {
+      return {
+        ok: false as const,
+        code: "FILE_NOT_FOUND" as WorkspaceErrorCode,
+        error: "The selected file no longer exists."
+      };
+    }
+
+    if (files.size <= 1) {
+      return {
+        ok: false as const,
+        code: "CANNOT_DELETE_LAST_FILE" as WorkspaceErrorCode,
+        error: "A workspace must contain at least one file."
+      };
+    }
+
+    const orderedFiles = Array.from(files.values());
+    const deletedIndex = orderedFiles.findIndex((item) => item.fileId === fileId);
+    const fallbackFile =
+      orderedFiles[deletedIndex + 1] ?? orderedFiles[deletedIndex - 1] ?? null;
+
+    files.delete(fileId);
+
+    return {
+      ok: true as const,
+      deletedFileId: fileId,
+      fallbackFileId: fallbackFile?.fileId ?? null
+    };
   }
 }

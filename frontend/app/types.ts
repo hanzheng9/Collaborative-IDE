@@ -2,7 +2,8 @@ export type ConnectionStatusValue =
   | "connecting"
   | "connected"
   | "disconnected"
-  | "reconnecting";
+  | "reconnecting"
+  | "reconnection-failed";
 
 export type SyncStatusValue =
   | "synced"
@@ -39,8 +40,28 @@ export type FileRenamedPayload = {
   file: WorkspaceFile;
 };
 
-export type FileOperationErrorPayload = {
+export type FileDeletedPayload = {
+  workspaceId: string;
+  fileId: string;
+  fallbackFileId: string | null;
+  deletedBy: string;
+};
+
+export type AppErrorPayload = {
+  code:
+    | "WORKSPACE_NOT_FOUND"
+    | "FILE_NOT_FOUND"
+    | "DUPLICATE_FILENAME"
+    | "INVALID_FILENAME"
+    | "CANNOT_DELETE_LAST_FILE"
+    | "INVALID_CURSOR_POSITION"
+    | "NOT_CONNECTED"
+    | "FILE_OPERATION_FAILED"
+    | "INTERNAL_SERVER_ERROR";
   message: string;
+  operation?: string;
+  workspaceId?: string;
+  fileId?: string;
 };
 
 export type CursorPosition = {
