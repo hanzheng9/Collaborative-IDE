@@ -25,6 +25,10 @@ The app supports real-time multi-file editing across browser tabs, collaborator 
 ## Architecture
 
 ```text
+shared/
+  src/
+    socketEvents.ts
+
 frontend/
   app/
     components/
@@ -34,15 +38,49 @@ frontend/
       DeleteFileDialog.tsx
       FileDialog.tsx
       FileSidebar.tsx
+    hooks/
+      useCollaborativeWorkspace.ts
     page.tsx
+    types.ts
 
 backend/
   src/
+    services/
+      workspaceService.ts
+    validation/
+      socketValidation.ts
+    app.ts
+    collaboratorState.ts
+    config.ts
     index.ts
     database.ts
+    logger.ts
+    server.ts
+    socketHandlers.ts
+    workspaceState.ts
 ```
 
-The backend keeps active workspace state in memory for fast Socket.io updates. Collaborator presence and cursor positions are intentionally in memory only.
+The app is split into three npm workspaces:
+
+- `frontend`: Next.js UI, Monaco Editor, and the collaborative workspace hook
+- `backend`: Express, Socket.io, in-memory workspace/collaborator state, and optional PostgreSQL helpers
+- `shared`: TypeScript contracts for Socket.io events and payloads used by both frontend and backend
+
+The backend keeps active workspace state in memory for fast Socket.io updates. Collaborator presence and cursor positions are intentionally in memory only. PostgreSQL support is optional and can be enabled later with `DATABASE_URL`.
+
+Backend responsibilities:
+
+- `app.ts`: Express app and `/health`
+- `server.ts`: HTTP server, Socket.io server, database startup, and graceful shutdown
+- `socketHandlers.ts`: Socket.io event flow and room broadcasting
+- `workspaceService.ts`: workspace/file state operations and debounced persistence calls
+- `socketValidation.ts`: runtime validation for incoming socket payloads
+
+Frontend responsibilities:
+
+- `page.tsx`: page layout and dialogs
+- `useCollaborativeWorkspace.ts`: Socket.io client lifecycle, editor sync, collaborator state, remote cursors, and jump-to-collaborator behavior
+- `components/`: focused UI pieces for files, collaborators, editor, dialogs, and status
 
 Socket.io events include:
 
@@ -77,13 +115,13 @@ npm install
 Start the frontend:
 
 ```bash
-npm run dev --workspace frontend
+npm run dev:frontend
 ```
 
 Start the backend in another terminal:
 
 ```bash
-npm run dev --workspace backend
+npm run dev:backend
 ```
 
 Open:
@@ -167,7 +205,9 @@ The current tests cover:
 
 ## Optional PostgreSQL
 
-The project includes early PostgreSQL groundwork for durable workspaces and files. To try it locally, create a database and set:
+The project can run without PostgreSQL. If `DATABASE_URL` is not set, workspace data stays in memory and resets when the backend restarts.
+
+The project also includes early PostgreSQL groundwork for durable workspaces and files. To try it locally later, create a database and set:
 
 ```bash
 export DATABASE_URL="postgres://USER:PASSWORD@localhost:5432/collaborative_ide"
