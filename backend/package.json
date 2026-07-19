@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@collaborative-ide/shared": "0.1.0",
     "cors": "latest",
     "express": "latest",
     "pg": "^8.22.0",

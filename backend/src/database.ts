@@ -20,6 +20,10 @@ export function isDatabaseConfigured() {
   return Boolean(pool);
 }
 
+export async function closeDatabase() {
+  await pool?.end();
+}
+
 export async function migrateDatabase() {
   if (!pool) {
     console.warn("DATABASE_URL is not set. PostgreSQL persistence is disabled.");
