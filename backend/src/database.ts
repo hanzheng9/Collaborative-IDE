@@ -1,4 +1,6 @@
 import pg from "pg";
+import type { Pool as PgPool, PoolClient } from "pg";
+import { logger } from "./logger.js";
 
 export type PersistedFile = {
   fileId: string;
@@ -16,6 +18,12 @@ const { Pool } = pg;
 const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
 
+pool?.on("error", (error) => {
+  logger.error("database reconnect failure", {
+    error: error.message
+  });
+});
+
 export function isDatabaseConfigured() {
   return Boolean(pool);
 }
@@ -26,7 +34,9 @@ export async function closeDatabase() {
 
 export async function migrateDatabase() {
   if (!pool) {
-    console.warn("DATABASE_URL is not set. PostgreSQL persistence is disabled.");
+    logger.warn("database unavailable", {
+      reason: "DATABASE_URL is not set"
+    });
     return;
   }
 
@@ -50,6 +60,8 @@ export async function migrateDatabase() {
 
     CREATE INDEX IF NOT EXISTS files_workspace_id_idx ON files(workspace_id);
   `);
+
+  logger.info("PostgreSQL persistence enabled");
 }
 
 export async function loadWorkspace(workspaceId: string) {
@@ -134,7 +146,10 @@ export async function createWorkspace(
   }
 }
 
-export async function saveFile(workspaceId: string, file: PersistedFile) {
+export async function saveFile(
+  workspaceId: string,
+  file: PersistedFile
+) {
   if (!pool) {
     return;
   }
@@ -146,6 +161,7 @@ export async function saveFile(workspaceId: string, file: PersistedFile) {
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         language = EXCLUDED.language,
+        content = EXCLUDED.content,
         updated_at = NOW()
     `,
     [file.fileId, workspaceId, file.fileName, file.language, file.content]
@@ -197,12 +213,41 @@ export async function saveFileContent(
   await touchWorkspace(workspaceId);
 }
 
-async function touchWorkspace(workspaceId: string) {
+export async function deleteFile(workspaceId: string, fileId: string) {
   if (!pool) {
     return;
   }
 
-  await pool.query("UPDATE workspaces SET updated_at = NOW() WHERE id = $1", [
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `
+        DELETE FROM files
+        WHERE workspace_id = $1 AND id = $2
+      `,
+      [workspaceId, fileId]
+    );
+    await touchWorkspace(workspaceId, client);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function touchWorkspace(
+  workspaceId: string,
+  client: PgPool | PoolClient | null = pool
+) {
+  if (!client) {
+    return;
+  }
+
+  await client.query("UPDATE workspaces SET updated_at = NOW() WHERE id = $1", [
     workspaceId
   ]);
 }

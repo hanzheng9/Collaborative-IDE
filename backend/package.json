@@ -14,6 +14,7 @@
   "dependencies": {
     "@collaborative-ide/shared": "0.1.0",
     "cors": "latest",
+    "dotenv": "^17.4.2",
     "express": "latest",
     "pg": "^8.22.0",
     "socket.io": "latest"

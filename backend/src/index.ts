@@ -1,6 +1,7 @@
+import "dotenv/config";
 import { startServer } from "./server.js";
 
-const { shutdown } = startServer();
+const { shutdown } = await startServer();
 
 process.on("SIGINT", () => {
   void shutdown("SIGINT").finally(() => {
