@@ -2,7 +2,7 @@
 
 A local full-stack collaborative code editor prototype built with Next.js, TypeScript, Monaco Editor, Express, and Socket.io.
 
-The app supports real-time multi-file editing across browser tabs, collaborator awareness, remote text cursors, and click-to-jump navigation. PostgreSQL groundwork exists, but the current polished MVP can still run in memory for local learning and demo use.
+The app supports real-time multi-file editing across browser tabs, collaborator awareness, remote text cursors, click-to-jump navigation, and optional PostgreSQL persistence. The in-memory workspace remains the live source of truth while the server is running, and PostgreSQL is used for durable storage across restarts.
 
 ## Features
 
@@ -14,6 +14,8 @@ The app supports real-time multi-file editing across browser tabs, collaborator 
 - Per-file editor view state for cursor and scroll restoration
 - Real-time code synchronization across connected tabs
 - New tabs receive the latest workspace state
+- Optional PostgreSQL persistence for workspaces and files
+- Debounced file content saves to avoid writing every keystroke
 - Active collaborator list
 - Current-file awareness
 - Remote text cursor decorations
@@ -46,6 +48,7 @@ frontend/
 backend/
   src/
     services/
+      debouncedPersistence.ts
       workspaceService.ts
     validation/
       socketValidation.ts
@@ -63,10 +66,10 @@ backend/
 The app is split into three npm workspaces:
 
 - `frontend`: Next.js UI, Monaco Editor, and the collaborative workspace hook
-- `backend`: Express, Socket.io, in-memory workspace/collaborator state, and optional PostgreSQL helpers
+- `backend`: Express, Socket.io, in-memory workspace/collaborator state, and PostgreSQL persistence
 - `shared`: TypeScript contracts for Socket.io events and payloads used by both frontend and backend
 
-The backend keeps active workspace state in memory for fast Socket.io updates. Collaborator presence and cursor positions are intentionally in memory only. PostgreSQL support is optional and can be enabled later with `DATABASE_URL`.
+The backend keeps active workspace state in memory for fast Socket.io updates. PostgreSQL sits underneath that memory cache and only handles persistence. Collaborator presence and cursor positions are intentionally in memory only and do not persist across restarts.
 
 Backend responsibilities:
 
@@ -74,6 +77,8 @@ Backend responsibilities:
 - `server.ts`: HTTP server, Socket.io server, database startup, and graceful shutdown
 - `socketHandlers.ts`: Socket.io event flow and room broadcasting
 - `workspaceService.ts`: workspace/file state operations and debounced persistence calls
+- `debouncedPersistence.ts`: delayed content saves so only the latest code is persisted after a short pause
+- `database.ts`: PostgreSQL migration, workspace/file loading, saving, renaming, content updates, deletion, and connection cleanup
 - `socketValidation.ts`: runtime validation for incoming socket payloads
 
 Frontend responsibilities:
@@ -207,7 +212,7 @@ The current tests cover:
 
 The project can run without PostgreSQL. If `DATABASE_URL` is not set, workspace data stays in memory and resets when the backend restarts.
 
-The project also includes early PostgreSQL groundwork for durable workspaces and files. To try it locally later, create a database and set:
+To persist workspaces and files across backend restarts, create a database and set:
 
 ```bash
 export DATABASE_URL="postgres://USER:PASSWORD@localhost:5432/collaborative_ide"
@@ -219,6 +224,26 @@ The backend creates the required tables automatically. The schema is also availa
 backend/schema.sql
 ```
 
+With PostgreSQL enabled:
+
+- the backend runs `migrateDatabase()` before accepting requests
+- the first user joining a workspace loads files from PostgreSQL if they exist
+- missing workspaces are created in memory and then persisted
+- file creation, rename, deletion, and content updates are persisted
+- content updates are debounced, so typing still syncs instantly over Socket.io without writing every keystroke
+- pending content writes are flushed during graceful shutdown
+
+## Persistence Test
+
+1. Set `DATABASE_URL`.
+2. Start the backend and frontend.
+3. Create and rename files.
+4. Add different content to each file.
+5. Stop and restart the backend.
+6. Refresh the frontend.
+7. Confirm files, names, languages, and contents are restored.
+8. Confirm collaborators and cursors reset after restart.
+
 ## Known Limitations
 
 - No authentication or permissions
@@ -226,11 +251,10 @@ backend/schema.sql
 - No CRDT or operational transform
 - Concurrent edits use simple last-write-wins behavior
 - Collaborator presence and cursor positions reset on backend restart
-- PostgreSQL persistence still needs fuller production-style testing
+- PostgreSQL persistence still needs fuller production-style testing and deployment hardening
 
 ## Future Work
 
-- Finish and harden PostgreSQL persistence
 - Add deployment configuration
 - Add user authentication
 - Add permissions or workspace sharing
