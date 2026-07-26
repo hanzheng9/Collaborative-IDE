@@ -25,11 +25,18 @@ export function isNonEmptyString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+export function isValidWorkspaceId(value: unknown) {
+  return (
+    typeof value === "string" &&
+    /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,63}$/.test(value)
+  );
+}
+
 export function isJoinWorkspacePayload(payload: unknown): payload is JoinWorkspacePayload {
   return (
     typeof payload === "object" &&
     payload !== null &&
-    isNonEmptyString((payload as JoinWorkspacePayload).workspaceId)
+    isValidWorkspaceId((payload as JoinWorkspacePayload).workspaceId)
   );
 }
 
@@ -37,7 +44,7 @@ export function isCreateFilePayload(payload: unknown): payload is CreateFilePayl
   return (
     typeof payload === "object" &&
     payload !== null &&
-    isNonEmptyString((payload as CreateFilePayload).workspaceId) &&
+    isValidWorkspaceId((payload as CreateFilePayload).workspaceId) &&
     isNonEmptyString((payload as CreateFilePayload).fileName)
   );
 }
@@ -46,7 +53,7 @@ export function isRenameFilePayload(payload: unknown): payload is RenameFilePayl
   return (
     typeof payload === "object" &&
     payload !== null &&
-    isNonEmptyString((payload as RenameFilePayload).workspaceId) &&
+    isValidWorkspaceId((payload as RenameFilePayload).workspaceId) &&
     isNonEmptyString((payload as RenameFilePayload).fileId) &&
     isNonEmptyString((payload as RenameFilePayload).fileName)
   );
@@ -56,7 +63,7 @@ export function isDeleteFilePayload(payload: unknown): payload is DeleteFilePayl
   return (
     typeof payload === "object" &&
     payload !== null &&
-    isNonEmptyString((payload as DeleteFilePayload).workspaceId) &&
+    isValidWorkspaceId((payload as DeleteFilePayload).workspaceId) &&
     isNonEmptyString((payload as DeleteFilePayload).fileId)
   );
 }
@@ -69,7 +76,7 @@ export function isCodeChangePayload(payload: unknown): payload is CodeChangePayl
   return (
     typeof payload === "object" &&
     payload !== null &&
-    isNonEmptyString((payload as CodeChangePayload).workspaceId) &&
+    isValidWorkspaceId((payload as CodeChangePayload).workspaceId) &&
     isNonEmptyString((payload as CodeChangePayload).fileId) &&
     typeof (payload as CodeChangePayload).code === "string"
   );
@@ -83,7 +90,7 @@ export function isCursorChangePayload(payload: unknown): payload is CursorChange
   const cursorPosition = (payload as CursorChangePayload).cursorPosition;
 
   return (
-    isNonEmptyString((payload as CursorChangePayload).workspaceId) &&
+    isValidWorkspaceId((payload as CursorChangePayload).workspaceId) &&
     isNonEmptyString((payload as CursorChangePayload).fileId) &&
     typeof cursorPosition === "object" &&
     cursorPosition !== null &&

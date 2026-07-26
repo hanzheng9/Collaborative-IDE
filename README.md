@@ -6,7 +6,9 @@ The app supports real-time multi-file editing across browser tabs, collaborator 
 
 ## Features
 
-- Multi-file workspace in the hardcoded `demo` room
+- Multi-file workspaces with independent shareable URLs
+- Shareable workspace URLs such as `/workspace/abc123`
+- Landing page for creating or joining workspaces
 - Create, rename, delete, and switch files
 - In-app create, rename, and delete confirmation dialogs with validation
 - Duplicate filename feedback
@@ -40,10 +42,16 @@ frontend/
       DeleteFileDialog.tsx
       FileDialog.tsx
       FileSidebar.tsx
+      WorkspaceLanding.tsx
+      WorkspacePage.tsx
     hooks/
       useCollaborativeWorkspace.ts
+    workspace/
+      [workspaceId]/
+        page.tsx
     page.tsx
     types.ts
+    workspaceRouter.ts
 
 backend/
   src/
@@ -83,9 +91,23 @@ Backend responsibilities:
 
 Frontend responsibilities:
 
-- `page.tsx`: page layout and dialogs
+- `page.tsx`: landing page for creating or joining workspaces
+- `workspace/[workspaceId]/page.tsx`: dynamic workspace route
+- `workspaceRouter.ts`: workspace ID generation, validation, parsing, and URL creation
+- `WorkspaceLanding.tsx`: create/join UI
+- `WorkspacePage.tsx`: collaborative editor page layout and dialogs
 - `useCollaborativeWorkspace.ts`: Socket.io client lifecycle, editor sync, collaborator state, remote cursors, and jump-to-collaborator behavior
 - `components/`: focused UI pieces for files, collaborators, editor, dialogs, and status
+
+## Workspace URLs
+
+The app no longer uses a hardcoded workspace. The landing page creates a unique workspace ID and redirects to:
+
+```text
+/workspace/{workspaceId}
+```
+
+Opening the same URL joins the same Socket.io room, memory workspace cache, and PostgreSQL workspace record. Different workspace URLs remain isolated from each other.
 
 Socket.io events include:
 
@@ -184,28 +206,27 @@ The current tests cover:
 
 ## Multi-Tab Test
 
-1. Open Tab A, Tab B, and Tab C at `http://localhost:3000`.
-2. Confirm all collaborators appear.
-3. Create several files.
-4. Confirm all files appear in every tab.
-5. Rename files from different tabs.
-6. Confirm names synchronize correctly.
-7. Delete a file and confirm it disappears in every tab.
-8. Try deleting the final file and confirm the app prevents it.
-9. Add different code to each file.
-10. Switch files repeatedly and confirm content stays separate.
-11. Confirm language mode changes based on extensions such as `.ts`, `.py`, `.json`, `.sql`, and `.md`.
-12. Move the text caret in one tab and confirm remote cursors appear only for users viewing the same file.
-13. Click another collaborator to jump to their current file and cursor.
-14. Close one tab and confirm that collaborator disappears.
-15. Stop the backend and confirm disconnected status appears.
-16. Restart the backend and confirm the frontend reconnects cleanly.
+1. Open `http://localhost:3000`.
+2. Create a workspace.
+3. Copy the workspace URL with Share.
+4. Open the same URL in Tab B and Tab C.
+5. Confirm all collaborators appear.
+6. Create, rename, delete, and switch files.
+7. Confirm edits synchronize only between tabs on the same workspace URL.
+8. Open a different workspace URL and confirm it is isolated.
+9. Refresh a workspace tab and confirm files and editor contents reload.
+10. Move the text caret in one tab and confirm remote cursors appear only for users viewing the same file.
+11. Click another collaborator to jump to their current file and cursor.
+12. Close one tab and confirm that collaborator disappears.
+13. Stop the backend and confirm disconnected status appears.
+14. Restart the backend and confirm the frontend reconnects cleanly.
 
 ## Current Policies
 
 - A workspace must always contain at least one file, so deleting the final file is blocked.
 - While disconnected, Monaco is read-only and edits are paused instead of stored offline.
-- On reconnect, the backend session state is treated as authoritative.
+- Workspace IDs must be 3-64 characters and use letters, numbers, hyphens, or underscores.
+- On reconnect, the backend session state for the current workspace URL is treated as authoritative.
 - Deleted files are removed by stable `fileId`; stale updates for deleted files are rejected.
 
 ## Optional PostgreSQL
@@ -229,6 +250,7 @@ With PostgreSQL enabled:
 - the backend runs `migrateDatabase()` before accepting requests
 - the first user joining a workspace loads files from PostgreSQL if they exist
 - missing workspaces are created in memory and then persisted
+- every workspace URL has independent files and database records
 - file creation, rename, deletion, and content updates are persisted
 - content updates are debounced, so typing still syncs instantly over Socket.io without writing every keystroke
 - pending content writes are flushed during graceful shutdown
@@ -237,10 +259,10 @@ With PostgreSQL enabled:
 
 1. Set `DATABASE_URL`.
 2. Start the backend and frontend.
-3. Create and rename files.
+3. Create a workspace from the landing page.
 4. Add different content to each file.
 5. Stop and restart the backend.
-6. Refresh the frontend.
+6. Reopen or refresh the same `/workspace/{workspaceId}` URL.
 7. Confirm files, names, languages, and contents are restored.
 8. Confirm collaborators and cursors reset after restart.
 

@@ -146,6 +146,36 @@ describe("Socket.io collaboration", () => {
     expect(workspaces.getWorkspaceState("demo").files[0]?.content).toBe("changed");
   });
 
+  it("keeps separate workspaces isolated", async () => {
+    const a = client();
+    const b = client();
+    await Promise.all([waitForEvent(a, "connect"), waitForEvent(b, "connect")]);
+    a.emit("join-workspace", { workspaceId: "alpha-room" });
+    b.emit("join-workspace", { workspaceId: "beta-room" });
+    await Promise.all([
+      waitForEvent(a, "workspace-state"),
+      waitForEvent(b, "workspace-state")
+    ]);
+
+    const unexpectedCrossWorkspaceEvent = waitForEvent(b, "code-change", 150).then(
+      () => true,
+      () => false
+    );
+    a.emit("code-change", {
+      workspaceId: "alpha-room",
+      fileId: "main.ts",
+      code: "alpha only"
+    });
+
+    expect(await unexpectedCrossWorkspaceEvent).toBe(false);
+    expect(workspaces.getWorkspaceState("alpha-room").files[0]?.content).toBe(
+      "alpha only"
+    );
+    expect(workspaces.getWorkspaceState("beta-room").files[0]?.content).not.toBe(
+      "alpha only"
+    );
+  });
+
   it("syncs file creation, rejects duplicates, and syncs rename", async () => {
     const a = client();
     const b = client();

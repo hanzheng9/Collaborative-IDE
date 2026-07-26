@@ -46,6 +46,30 @@ body {
   font-size: 14px;
 }
 
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbarActions button,
+.primaryButton,
+.joinRow button {
+  border: 1px solid #315bb8;
+  border-radius: 6px;
+  background: #24458f;
+  color: #f5f7fb;
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 12px;
+}
+
+.topbarActions button:hover,
+.primaryButton:hover,
+.joinRow button:hover {
+  background: #2f58b3;
+}
+
 .statusGroup {
   display: flex;
   flex-wrap: wrap;
@@ -91,6 +115,70 @@ body {
   color: #f0d9ff;
   font-size: 13px;
   padding: 10px 24px;
+}
+
+.landingPage {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  background: #101318;
+  padding: 24px;
+}
+
+.landingPanel {
+  width: min(440px, 100%);
+}
+
+.landingPanel h1 {
+  margin: 0 0 24px;
+  font-size: 32px;
+  letter-spacing: 0;
+}
+
+.primaryButton {
+  width: 100%;
+  font-size: 15px;
+  padding-block: 12px;
+}
+
+.joinForm {
+  margin-top: 28px;
+}
+
+.joinForm label {
+  display: block;
+  margin-bottom: 8px;
+  color: #aab3c2;
+  font-size: 13px;
+}
+
+.joinRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.joinRow input {
+  min-width: 0;
+  border: 1px solid #364255;
+  border-radius: 6px;
+  outline: none;
+  background: #101318;
+  color: #f5f7fb;
+  font: inherit;
+  padding: 10px 11px;
+}
+
+.joinRow input:focus {
+  border-color: #4c7dff;
+}
+
+.landingError {
+  margin: 10px 0 0;
+  color: #f3a2a2;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .workspace {
@@ -453,8 +541,17 @@ body {
     flex-direction: column;
   }
 
+  .topbarActions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .statusGroup {
     justify-content: flex-start;
+  }
+
+  .joinRow {
+    grid-template-columns: 1fr;
   }
 
   .workspace {
