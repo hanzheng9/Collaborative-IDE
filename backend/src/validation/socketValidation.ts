@@ -25,7 +25,7 @@ export function isNonEmptyString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-export function isValidWorkspaceId(value: unknown) {
+export function isValidWorkspaceId(value: unknown): value is string {
   return (
     typeof value === "string" &&
     /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,63}$/.test(value)

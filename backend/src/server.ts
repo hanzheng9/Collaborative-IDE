@@ -13,13 +13,29 @@ import {
   saveFile,
   saveFileContent
 } from "./database.js";
+import { ExecutionService } from "./execution/executionService.js";
 import { logger } from "./logger.js";
+import { WorkspaceService, type WorkspacePersistence } from "./services/workspaceService.js";
 import { registerSocketHandlers } from "./socketHandlers.js";
 import type { ClientToServerEvents, ServerToClientEvents } from "./types.js";
 
 export async function startServer() {
   const config = loadConfig();
-  const app = createApp();
+  const persistence: WorkspacePersistence = {
+    async loadWorkspace(workspaceId) {
+      return (await loadWorkspace(workspaceId))?.files ?? null;
+    },
+    async createWorkspace(workspaceId, files) {
+      await createWorkspace(workspaceId, workspaceId, files);
+    },
+    deleteFile,
+    renameFile,
+    saveFile,
+    saveFileContent
+  };
+  const workspaceService = new WorkspaceService({ persistence });
+  const executionService = new ExecutionService({ workspaceService });
+  const app = createApp({ executionService });
   const server = createServer(app);
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
     cors: {
@@ -41,22 +57,12 @@ export async function startServer() {
   }
 
   const { flushPendingWrites } = registerSocketHandlers(io, {
-    persistence: {
-      async loadWorkspace(workspaceId) {
-        return (await loadWorkspace(workspaceId))?.files ?? null;
-      },
-      async createWorkspace(workspaceId, files) {
-        await createWorkspace(workspaceId, workspaceId, files);
-      },
-      deleteFile,
-      renameFile,
-      saveFile,
-      saveFileContent
-    }
+    workspaceService
   });
 
   server.listen(config.port, () => {
     logger.info("backend listening", {
+      codeExecution: executionService.isConfigured() ? "enabled" : "disabled",
       postgreSQLPersistence: persistenceAvailable ? "enabled" : "disabled",
       port: config.port
     });

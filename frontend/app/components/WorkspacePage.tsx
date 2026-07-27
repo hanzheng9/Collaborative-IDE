@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  isExecutableLanguage,
+  runCode,
+  type ExecutionResult
+} from "../codeExecution";
 import { useCollaborativeWorkspace } from "../hooks/useCollaborativeWorkspace";
 import type { WorkspaceFile } from "../types";
+import { AiAssistantPanel } from "./AiAssistantPanel";
 import { CodeEditor } from "./CodeEditor";
 import { CollaboratorList } from "./CollaboratorList";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { DeleteFileDialog } from "./DeleteFileDialog";
+import { ExecutionPanel } from "./ExecutionPanel";
 import { FileDialog } from "./FileDialog";
 import { FileSidebar } from "./FileSidebar";
 
@@ -27,6 +34,7 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
     deleteFile,
     feedbackMessage,
     files,
+    getAiSelection,
     handleEditorChange,
     handleEditorMount,
     isMonacoReady,
@@ -38,8 +46,19 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
     selectedFileId,
     selectFile,
     showFeedback,
-    syncStatus
+    syncStatus,
+    replaceAiSelection
   } = useCollaborativeWorkspace(workspaceId);
+  const executionAbortRef = useRef<AbortController | null>(null);
+  const executionRequestIdRef = useRef(0);
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
+  const [isExecutionPanelOpen, setIsExecutionPanelOpen] = useState(false);
+  const [isRunningCode, setIsRunningCode] = useState(false);
+  const [executionError, setExecutionError] = useState("");
+  const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(
+    null
+  );
+  const [stdin, setStdin] = useState("");
   const [fileDialog, setFileDialog] = useState<FileDialogState>(null);
   const [deleteTarget, setDeleteTarget] = useState<WorkspaceFile | null>(null);
   const [isDeletePending, setIsDeletePending] = useState(false);
@@ -71,6 +90,88 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
     });
   };
 
+  const runSelectedFile = useCallback(async () => {
+    if (!selectedFile) {
+      setIsExecutionPanelOpen(true);
+      setExecutionError("Select a file before running code.");
+      return;
+    }
+
+    if (!isExecutableLanguage(selectedFile.language)) {
+      setIsExecutionPanelOpen(true);
+      setExecutionError("This file language is not supported for code execution.");
+      return;
+    }
+
+    executionAbortRef.current?.abort();
+    const abortController = new AbortController();
+    executionAbortRef.current = abortController;
+    const requestId = executionRequestIdRef.current + 1;
+    executionRequestIdRef.current = requestId;
+
+    setIsExecutionPanelOpen(true);
+    setIsRunningCode(true);
+    setExecutionError("");
+    setExecutionResult(null);
+
+    try {
+      const result = await runCode(
+        workspaceId,
+        selectedFile,
+        files,
+        stdin,
+        abortController.signal
+      );
+
+      if (executionRequestIdRef.current === requestId) {
+        setExecutionResult(result);
+      }
+    } catch (error) {
+      if (
+        abortController.signal.aborted ||
+        executionRequestIdRef.current !== requestId
+      ) {
+        return;
+      }
+
+      setExecutionError(
+        error instanceof Error ? error.message : "Code execution failed."
+      );
+    } finally {
+      if (executionRequestIdRef.current === requestId) {
+        setIsRunningCode(false);
+      }
+    }
+  }, [files, selectedFile, stdin, workspaceId]);
+
+  const stopExecution = () => {
+    executionAbortRef.current?.abort();
+    executionRequestIdRef.current += 1;
+    setIsRunningCode(false);
+    setExecutionError("Execution request stopped locally.");
+  };
+
+  const clearExecutionOutput = () => {
+    setExecutionError("");
+    setExecutionResult(null);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        void runSelectedFile();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      executionAbortRef.current?.abort();
+    };
+  }, [runSelectedFile]);
+
   return (
     <main className="page">
       <header className="topbar">
@@ -82,6 +183,15 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
           </p>
         </div>
         <div className="topbarActions">
+          <button type="button" onClick={() => void runSelectedFile()}>
+            Run Code
+          </button>
+          <button disabled={!isRunningCode} type="button" onClick={stopExecution}>
+            Stop
+          </button>
+          <button type="button" onClick={() => setIsAiPanelOpen(true)}>
+            Ask AI
+          </button>
           <button type="button" onClick={shareWorkspace}>
             Share
           </button>
@@ -98,7 +208,7 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
         </div>
       ) : null}
 
-      <div className="workspace">
+      <div className={isAiPanelOpen ? "workspace withAiPanel" : "workspace"}>
         <aside className="sidebar">
           <FileSidebar
             files={files}
@@ -124,19 +234,42 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
           />
         </aside>
 
-        <section className="editorShell" aria-label="Code editor">
-          {!isWorkspaceLoaded && connectionStatus !== "disconnected" ? (
-            <div className="editorLoading">Loading workspace...</div>
-          ) : (
-            <CodeEditor
-              isMonacoReady={isMonacoReady}
-              selectedFile={selectedFile}
-              readOnly={connectionStatus !== "connected"}
-              onMount={handleEditorMount}
-              onChange={handleEditorChange}
+        <section className="editorColumn" aria-label="Code editor">
+          <div className="editorShell">
+            {!isWorkspaceLoaded && connectionStatus !== "disconnected" ? (
+              <div className="editorLoading">Loading workspace...</div>
+            ) : (
+              <CodeEditor
+                isMonacoReady={isMonacoReady}
+                selectedFile={selectedFile}
+                readOnly={connectionStatus !== "connected"}
+                onMount={handleEditorMount}
+                onChange={handleEditorChange}
+              />
+            )}
+          </div>
+
+          {isExecutionPanelOpen ? (
+            <ExecutionPanel
+              error={executionError}
+              isRunning={isRunningCode}
+              result={executionResult}
+              stdin={stdin}
+              setStdin={setStdin}
+              onClear={clearExecutionOutput}
+              onRun={() => void runSelectedFile()}
+              onStop={stopExecution}
             />
-          )}
+          ) : null}
         </section>
+
+        {isAiPanelOpen ? (
+          <AiAssistantPanel
+            getSelection={getAiSelection}
+            onClose={() => setIsAiPanelOpen(false)}
+            onReplaceSelection={replaceAiSelection}
+          />
+        ) : null}
       </div>
 
       {fileDialog ? (

@@ -16,6 +16,8 @@
     "cors": "latest",
     "dotenv": "^17.4.2",
     "express": "latest",
+    "express-rate-limit": "^8.6.1",
+    "openai": "^6.49.0",
     "pg": "^8.22.0",
     "socket.io": "latest"
   },

@@ -70,6 +70,11 @@ body {
   background: #2f58b3;
 }
 
+.topbarActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .statusGroup {
   display: flex;
   flex-wrap: wrap;
@@ -187,6 +192,10 @@ body {
   min-height: 0;
   flex: 1;
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+}
+
+.workspace.withAiPanel {
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(300px, 380px);
 }
 
 .sidebar {
@@ -406,6 +415,13 @@ body {
   line-height: 1.4;
 }
 
+.editorColumn {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
 .editorShell {
   min-width: 0;
   min-height: 0;
@@ -418,6 +434,130 @@ body {
   justify-content: center;
   color: #aab3c2;
   font-size: 14px;
+}
+
+.aiPanel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border-left: 1px solid #252b36;
+  background: #151922;
+}
+
+.aiPanelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #252b36;
+  padding: 14px;
+}
+
+.aiPanelHeader h2 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.aiPanelHeader p {
+  margin: 5px 0 0;
+  color: #aab3c2;
+  font-size: 12px;
+}
+
+.aiPanel button {
+  border: 1px solid #364255;
+  border-radius: 6px;
+  background: #202838;
+  color: #f5f7fb;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 7px 10px;
+}
+
+.aiPanel button:hover:not(:disabled) {
+  background: #2a3447;
+}
+
+.aiPanel button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.aiActionToolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  border-bottom: 1px solid #252b36;
+  padding: 12px;
+}
+
+.aiActionToolbar button:first-child {
+  grid-column: 1 / -1;
+}
+
+.aiState,
+.aiError {
+  color: #aab3c2;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 14px;
+}
+
+.aiError {
+  color: #f3a2a2;
+}
+
+.aiError p {
+  margin: 0 0 10px;
+}
+
+.aiResultHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid #252b36;
+  padding: 10px 12px;
+}
+
+.aiResultHeader span {
+  color: #d7deea;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.aiResultHeader div {
+  display: flex;
+  gap: 6px;
+}
+
+.aiResult {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  color: #d7deea;
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 12px 14px 18px;
+}
+
+.aiResult :first-child {
+  margin-top: 0;
+}
+
+.aiResult pre {
+  overflow: auto;
+  border: 1px solid #2f3a4c;
+  border-radius: 6px;
+  background: #0e1117;
+  padding: 10px;
+}
+
+.aiResult code {
+  color: #e7edf8;
 }
 
 .remoteCursor {
@@ -440,6 +580,79 @@ body {
 
 .jumpLineHighlight {
   background: rgba(59, 130, 246, 0.22);
+}
+
+.executionPanel {
+  display: grid;
+  max-height: 260px;
+  min-height: 170px;
+  border-top: 1px solid #252b36;
+  background: #0e1117;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.executionToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #252b36;
+  padding: 8px 10px;
+}
+
+.executionTabs,
+.executionActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.executionToolbar button {
+  border: 1px solid #364255;
+  border-radius: 6px;
+  background: #202838;
+  color: #f5f7fb;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 9px;
+}
+
+.executionToolbar button.active {
+  border-color: #315bb8;
+  background: #24458f;
+}
+
+.executionToolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.executionOutput,
+.stdinInput {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  border: 0;
+  outline: none;
+  background: #0e1117;
+  color: #d7deea;
+  font-family:
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 12px;
+  resize: none;
+  white-space: pre-wrap;
+}
+
+.errorOutput {
+  color: #f3a2a2;
 }
 
 .dialogBackdrop {
@@ -557,6 +770,20 @@ body {
   .workspace {
     height: calc(100vh - 136px);
     grid-template-columns: minmax(170px, 38vw) minmax(0, 1fr);
+  }
+
+  .workspace.withAiPanel {
+    grid-template-columns: minmax(150px, 32vw) minmax(0, 1fr);
+  }
+
+  .workspace.withAiPanel .aiPanel {
+    position: fixed;
+    z-index: 15;
+    top: 96px;
+    right: 0;
+    bottom: 0;
+    width: min(380px, 92vw);
+    box-shadow: -18px 0 40px rgba(0, 0, 0, 0.35);
   }
 
   .sidebarHeader {

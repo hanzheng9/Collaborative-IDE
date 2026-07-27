@@ -2,7 +2,7 @@
 
 A local full-stack collaborative code editor prototype built with Next.js, TypeScript, Monaco Editor, Express, and Socket.io.
 
-The app supports real-time multi-file editing across browser tabs, collaborator awareness, remote text cursors, click-to-jump navigation, and optional PostgreSQL persistence. The in-memory workspace remains the live source of truth while the server is running, and PostgreSQL is used for durable storage across restarts.
+The app supports real-time multi-file editing across browser tabs, collaborator awareness, remote text cursors, click-to-jump navigation, selected-code AI assistance, local code execution through a backend execution API, and optional PostgreSQL persistence. The in-memory workspace remains the live source of truth while the server is running, and PostgreSQL is used for durable storage across restarts.
 
 ## Features
 
@@ -22,6 +22,12 @@ The app supports real-time multi-file editing across browser tabs, collaborator 
 - Current-file awareness
 - Remote text cursor decorations
 - Click a collaborator to jump to their file and cursor line
+- Selected-code AI assistant actions: Explain, Refactor, Fix Bug, Generate Tests, and Optimize
+- AI suggestions are shown for review and never applied automatically
+- Replace Selection uses Monaco edits so undo/redo and existing Socket.io sync continue to work
+- Run Code support for JavaScript, TypeScript, and Python
+- Standard input and local-only output panel
+- Stop button for cancelling a local execution request
 - Connection status: connecting, connected, disconnected, reconnecting, reconnection failed
 - Session sync status: synced, syncing, unsynced changes, connection lost
 - Structured Socket.io error feedback for invalid file operations
@@ -42,6 +48,9 @@ frontend/
       DeleteFileDialog.tsx
       FileDialog.tsx
       FileSidebar.tsx
+      AiActionToolbar.tsx
+      AiAssistantPanel.tsx
+      AiResultView.tsx
       WorkspaceLanding.tsx
       WorkspacePage.tsx
     hooks/
@@ -58,6 +67,21 @@ backend/
     services/
       debouncedPersistence.ts
       workspaceService.ts
+    ai/
+      aiPrompts.ts
+      aiRouter.ts
+      aiService.ts
+      aiTypes.ts
+      aiValidation.ts
+      azureAiClient.ts
+    execution/
+      executionProvider.ts
+      executionRouter.ts
+      executionService.ts
+      executionTypes.ts
+      executionValidation.ts
+      languageRegistry.ts
+      pistonExecutionProvider.ts
     validation/
       socketValidation.ts
     app.ts
@@ -88,6 +112,8 @@ Backend responsibilities:
 - `debouncedPersistence.ts`: delayed content saves so only the latest code is persisted after a short pause
 - `database.ts`: PostgreSQL migration, workspace/file loading, saving, renaming, content updates, deletion, and connection cleanup
 - `socketValidation.ts`: runtime validation for incoming socket payloads
+- `ai/`: Azure OpenAI client setup, prompt construction, validation, service orchestration, and `/api/ai/assist`
+- `execution/`: code execution validation, provider abstraction, Piston integration, execution orchestration, and `/api/execution/run`
 
 Frontend responsibilities:
 
@@ -97,7 +123,42 @@ Frontend responsibilities:
 - `WorkspaceLanding.tsx`: create/join UI
 - `WorkspacePage.tsx`: collaborative editor page layout and dialogs
 - `useCollaborativeWorkspace.ts`: Socket.io client lifecycle, editor sync, collaborator state, remote cursors, and jump-to-collaborator behavior
+- `AiAssistantPanel.tsx`: selected-code AI request UI, Markdown result rendering, copy, retry, and explicit replacement
+- `ExecutionPanel.tsx`: Run Code output, standard input, copy, clear, and stop controls
 - `components/`: focused UI pieces for files, collaborators, editor, dialogs, and status
+
+## AI Assistant Flow
+
+```text
+Monaco selection
+  -> Next.js client
+  -> Express POST /api/ai/assist
+  -> Azure OpenAI gpt-5-nano deployment
+  -> Result shown for user review
+  -> Optional Replace Selection
+  -> Existing Socket.io synchronization
+```
+
+The browser only sends the selected code, current file name, Monaco language, and limited surrounding context. It does not send the full workspace. The backend reads Azure credentials from environment variables and never returns them to the browser.
+
+## Code Execution Flow
+
+```text
+Active Monaco file
+  -> Next.js client
+  -> Express POST /api/execution/run
+  -> External isolated execution provider
+  -> Normalized result
+  -> Local output panel
+```
+
+Run Code supports:
+
+- JavaScript
+- TypeScript
+- Python
+
+Code execution is intentionally not sent through Socket.io, not broadcast to collaborators, and not persisted. Each user sees only their own run output.
 
 ## Workspace URLs
 
@@ -171,6 +232,40 @@ Expected response:
 }
 ```
 
+AI assistant environment variables, set only for the backend:
+
+```bash
+AZURE_OPENAI_API_KEY="your-api-key"
+AZURE_OPENAI_ENDPOINT="https://your-resource-or-project-endpoint"
+AZURE_OPENAI_DEPLOYMENT="gpt-5-nano"
+```
+
+Do not prefix these with `NEXT_PUBLIC_`.
+
+Optional local AI rate-limit overrides:
+
+```bash
+AI_RATE_LIMIT_MAX="20"
+AI_RATE_LIMIT_WINDOW_MS="600000"
+```
+
+For local testing, you can temporarily increase `AI_RATE_LIMIT_MAX` or lower `AI_RATE_LIMIT_WINDOW_MS`. Restart the backend after changing these values.
+
+Optional code execution environment variables, set only for the backend:
+
+```bash
+CODE_EXECUTION_PROVIDER="piston"
+PISTON_API_URL="https://emkc.org/api/v2/piston"
+PISTON_API_KEY=""
+PISTON_JAVASCRIPT_VERSION="18.15.0"
+PISTON_TYPESCRIPT_VERSION="5.0.3"
+PISTON_PYTHON_VERSION="3.10.0"
+EXECUTION_RATE_LIMIT_MAX="10"
+EXECUTION_RATE_LIMIT_WINDOW_MS="300000"
+```
+
+The backend uses an execution provider abstraction so another sandbox provider can be added later. The current implementation uses Piston-compatible APIs. For the public Piston service, use `https://emkc.org/api/v2/piston` as the base URL. If you self-host Piston, set `PISTON_API_URL` to that instance's API base, or to the full `/execute` URL.
+
 ## Automated Tests
 
 Run the full automated test suite:
@@ -203,6 +298,10 @@ The current tests cover:
 - File sidebar behavior
 - File dialog and delete confirmation behavior
 - Collaborator list rendering and click handling
+- AI route validation, provider failure handling, empty responses, mocked provider calls, and rate limiting
+- AI panel no-selection, loading, error, copy, explicit replacement, and disabled-action states
+- Code execution validation, safe filename checks, language support, provider failures, output truncation, and rate limiting
+- Run Code panel loading, stdout/stderr rendering, stdin, stop, copy, clear, button run, and keyboard run behavior
 
 ## Multi-Tab Test
 
@@ -228,6 +327,35 @@ The current tests cover:
 - Workspace IDs must be 3-64 characters and use letters, numbers, hyphens, or underscores.
 - On reconnect, the backend session state for the current workspace URL is treated as authoritative.
 - Deleted files are removed by stable `fileId`; stale updates for deleted files are rejected.
+- AI requests are limited to 20 requests per IP every 10 minutes.
+- AI selected code is limited to 12,000 characters.
+- AI output is rendered as untrusted Markdown with raw HTML disabled.
+- AI-generated code is never executed or inserted automatically.
+
+## AI Manual Test
+
+1. Select code in Monaco.
+2. Click `Ask AI`.
+3. Run Explain and confirm an explanation appears.
+4. Run Refactor, Fix Bug, Generate Tests, and Optimize.
+5. Confirm generated code is not inserted automatically.
+6. Click Replace Selection for a replacement response.
+7. Confirm only the selected range changes.
+8. Use undo and confirm the original code returns.
+9. Open the same workspace in another tab and confirm the AI-applied edit syncs through Socket.io.
+10. Refresh and confirm the edit persists through the existing workspace persistence flow.
+11. Try Ask AI with no selection and confirm the helpful warning appears.
+12. Send repeated requests and confirm rate limiting eventually returns a friendly error.
+
+## Code Execution Manual Test
+
+1. Open a workspace.
+2. Select or create a JavaScript, TypeScript, or Python file.
+3. Click `Run Code` or press `Ctrl+Enter` / `Cmd+Enter`.
+4. Confirm the output panel shows `Running...` and then the result.
+5. Add standard input in the `Input` tab and run again.
+6. Open the same workspace in another browser tab and confirm the run output appears only in the tab that ran the code.
+7. Try running an unsupported file type and confirm a friendly error appears.
 
 ## Optional PostgreSQL
 
@@ -274,11 +402,25 @@ With PostgreSQL enabled:
 - Concurrent edits use simple last-write-wins behavior
 - Collaborator presence and cursor positions reset on backend restart
 - PostgreSQL persistence still needs fuller production-style testing and deployment hardening
+- AI requests are stateless and not persisted
+- AI can only work on the current Monaco selection
+- Code execution depends on a configured external execution provider
+- Code execution is limited to JavaScript, TypeScript, and Python
+- Run output is local to the requesting browser tab
+
+## Code Execution Safety Notes
+
+- The Express server does not execute submitted code directly.
+- The backend does not use `eval`, `new Function`, shell commands, or `child_process` for user code.
+- Provider credentials and URLs stay on the backend.
+- Submitted filenames are validated to block path traversal and secret-like files.
+- Execution requests are rate limited.
+- Source, stdin, runtime, and output sizes are capped.
+- Results are rendered as plain text in the frontend output panel.
 
 ## Future Work
 
 - Add deployment configuration
 - Add user authentication
 - Add permissions or workspace sharing
-- Add optional AI assistant features
 - Add stronger conflict handling for simultaneous edits

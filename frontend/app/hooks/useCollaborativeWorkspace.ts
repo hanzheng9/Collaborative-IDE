@@ -28,8 +28,34 @@ type EditorInstance = Parameters<OnMount>[0];
 type EditorViewState = ReturnType<EditorInstance["saveViewState"]>;
 type CollaborativeSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
+export type AiCodeSelection = {
+  code: string;
+  fileId: string;
+  fileName: string;
+  language: string;
+  range: {
+    endColumn: number;
+    endLineNumber: number;
+    startColumn: number;
+    startLineNumber: number;
+  };
+  surroundingCode?: string;
+};
+
 function getCollaboratorClassName(userId: string) {
   return `collaborator-${userId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+function rangesMatch(
+  first: AiCodeSelection["range"] | null | undefined,
+  second: AiCodeSelection["range"] | null | undefined
+) {
+  return (
+    first?.startLineNumber === second?.startLineNumber &&
+    first?.startColumn === second?.startColumn &&
+    first?.endLineNumber === second?.endLineNumber &&
+    first?.endColumn === second?.endColumn
+  );
 }
 
 export function useCollaborativeWorkspace(workspaceId: string) {
@@ -490,6 +516,91 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     markSyncedSoon();
   };
 
+  const getAiSelection = (): AiCodeSelection | null => {
+    const editor = editorRef.current;
+    const model = editor?.getModel();
+    const selection = editor?.getSelection();
+
+    if (!editor || !model || !selection || selection.isEmpty() || !selectedFile) {
+      return null;
+    }
+
+    const code = model.getValueInRange(selection).trim();
+
+    if (!code) {
+      return null;
+    }
+
+    const startLineNumber = Math.max(1, selection.startLineNumber - 5);
+    const endLineNumber = Math.min(
+      model.getLineCount(),
+      selection.endLineNumber + 5
+    );
+    const surroundingCode = model.getValueInRange({
+      startLineNumber,
+      startColumn: 1,
+      endLineNumber,
+      endColumn: model.getLineMaxColumn(endLineNumber)
+    });
+
+    return {
+      code,
+      fileId: selectedFile.fileId,
+      fileName: selectedFile.fileName,
+      language: selectedFile.language,
+      range: {
+        endColumn: selection.endColumn,
+        endLineNumber: selection.endLineNumber,
+        startColumn: selection.startColumn,
+        startLineNumber: selection.startLineNumber
+      },
+      surroundingCode
+    };
+  };
+
+  const replaceAiSelection = (
+    selection: AiCodeSelection,
+    replacementCode: string
+  ) => {
+    const editor = editorRef.current;
+    const currentSelection = editor?.getSelection();
+
+    if (!editor || !currentSelection || currentSelection.isEmpty()) {
+      return { ok: false as const, error: "The editor is not ready." };
+    }
+
+    if (selection.fileId !== selectedFileIdRef.current) {
+      const shouldContinue = window.confirm(
+        "The selected file changed after this AI request started. Replace the original selection anyway?"
+      );
+
+      if (!shouldContinue) {
+        return { ok: false as const, error: "Replacement cancelled." };
+      }
+    } else if (!rangesMatch(selection.range, currentSelection)) {
+      const shouldContinue = window.confirm(
+        "The editor selection changed after this AI request started. Replace the original selection anyway?"
+      );
+
+      if (!shouldContinue) {
+        return { ok: false as const, error: "Replacement cancelled." };
+      }
+    }
+
+    editor.pushUndoStop();
+    editor.executeEdits("ai-assistant", [
+      {
+        forceMoveMarkers: true,
+        range: selection.range,
+        text: replacementCode
+      }
+    ]);
+    editor.pushUndoStop();
+    editor.focus();
+
+    return { ok: true as const };
+  };
+
   const createFile = (fileName: string, onError?: () => void) => {
     if (!socketRef.current?.connected) {
       showFeedback("Cannot create a file while disconnected.");
@@ -636,6 +747,7 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     deleteFile,
     feedbackMessage,
     files,
+    getAiSelection,
     handleEditorChange,
     handleEditorMount,
     isMonacoReady,
@@ -647,6 +759,7 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     selectedFileId,
     selectFile,
     showFeedback,
-    syncStatus
+    syncStatus,
+    replaceAiSelection
   };
 }
