@@ -1,16 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { Launch } from "@carbon/icons-react";
+import { Button, InlineNotification, TextInput, Theme } from "@carbon/react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useThemePreference } from "../hooks/useThemePreference";
 import {
   createWorkspaceId,
   getWorkspacePath,
   isValidWorkspaceId,
   parseWorkspaceInput
 } from "../workspaceRouter";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 
 export function WorkspaceLanding() {
   const router = useRouter();
+  const { carbonTheme, setThemePreference, themePreference } =
+    useThemePreference();
   const [workspaceInput, setWorkspaceInput] = useState("");
   const [error, setError] = useState("");
 
@@ -30,37 +36,60 @@ export function WorkspaceLanding() {
   };
 
   return (
-    <main className="landingPage">
-      <section className="landingPanel" aria-labelledby="landing-title">
-        <h1 id="landing-title">Collaborative IDE</h1>
-
-        <button className="primaryButton" type="button" onClick={createWorkspace}>
-          Create Workspace
-        </button>
-
-        <form
-          className="joinForm"
-          onSubmit={(event) => {
-            event.preventDefault();
-            joinWorkspace();
-          }}
-        >
-          <label htmlFor="workspace-link">Join Existing Workspace</label>
-          <div className="joinRow">
-            <input
-              id="workspace-link"
-              placeholder="workspace link or ID"
-              value={workspaceInput}
-              onChange={(event) => {
-                setWorkspaceInput(event.target.value);
-                setError("");
-              }}
+    <Theme theme={carbonTheme}>
+      <main className="landingPage">
+        <section className="landingPanel" aria-labelledby="landing-title">
+          <div className="landingThemeControl">
+            <ThemeSwitcher
+              value={themePreference}
+              onChange={setThemePreference}
             />
-            <button type="submit">Join</button>
           </div>
-          {error ? <p className="landingError">{error}</p> : null}
-        </form>
-      </section>
-    </main>
+          <p className="landingEyebrow">Collaborative workspace</p>
+          <h1 id="landing-title">Collaborative IDE</h1>
+
+          <Button
+            className="primaryButton"
+            renderIcon={Launch}
+            type="button"
+            onClick={createWorkspace}
+          >
+            Create Workspace
+          </Button>
+
+          <form
+            className="joinForm"
+            onSubmit={(event) => {
+              event.preventDefault();
+              joinWorkspace();
+            }}
+          >
+            <div className="joinRow">
+              <TextInput
+                id="workspace-link"
+                labelText="Join Existing Workspace"
+                placeholder="workspace link or ID"
+                value={workspaceInput}
+                onChange={(event) => {
+                  setWorkspaceInput(event.target.value);
+                  setError("");
+                }}
+              />
+              <Button kind="secondary" type="submit">
+                Join
+              </Button>
+            </div>
+            {error ? (
+              <InlineNotification
+                hideCloseButton
+                kind="error"
+                lowContrast
+                title={error}
+              />
+            ) : null}
+          </form>
+        </section>
+      </main>
+    </Theme>
   );
 }

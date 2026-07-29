@@ -266,6 +266,22 @@ EXECUTION_RATE_LIMIT_WINDOW_MS="300000"
 
 The backend uses an execution provider abstraction so another sandbox provider can be added later. The current implementation uses Piston-compatible APIs. For the public Piston service, use `https://emkc.org/api/v2/piston` as the base URL. If you self-host Piston, set `PISTON_API_URL` to that instance's API base, or to the full `/execute` URL.
 
+For local Piston development:
+
+```bash
+docker run --privileged -v /tmp/piston:/piston -dit -p 2000:2000 --name piston_api ghcr.io/engineer-man/piston
+curl -X POST http://localhost:2000/api/v2/packages -H "Content-Type: application/json" -d '{"language":"node","version":"18.15.0"}'
+curl -X POST http://localhost:2000/api/v2/packages -H "Content-Type: application/json" -d '{"language":"typescript","version":"5.0.3"}'
+curl -X POST http://localhost:2000/api/v2/packages -H "Content-Type: application/json" -d '{"language":"python","version":"3.10.0"}'
+```
+
+Then set:
+
+```bash
+PISTON_API_URL="http://localhost:2000/api/v2"
+PISTON_API_KEY=""
+```
+
 ## Automated Tests
 
 Run the full automated test suite:
@@ -416,6 +432,7 @@ With PostgreSQL enabled:
 - Submitted filenames are validated to block path traversal and secret-like files.
 - Execution requests are rate limited.
 - Source, stdin, runtime, and output sizes are capped.
+- Runtime is capped at 3 seconds to match local Piston's default limit.
 - Results are rendered as plain text in the frontend output panel.
 
 ## Future Work

@@ -15,11 +15,11 @@ export function ExecutionOutput({
   result
 }: ExecutionOutputProps) {
   if (isRunning) {
-    return <pre className="executionOutput">Running...</pre>;
+    return <pre className="executionOutput" aria-live="polite">Running...</pre>;
   }
 
   if (error) {
-    return <pre className="executionOutput errorOutput">{error}</pre>;
+    return <pre className="executionOutput errorOutput" aria-live="assertive">{error}</pre>;
   }
 
   if (!result) {
@@ -36,5 +36,5 @@ export function ExecutionOutput({
     result.stderr ? `\nStandard error:\n${result.stderr}` : ""
   ].filter(Boolean);
 
-  return <pre className="executionOutput">{lines.join("\n")}</pre>;
+  return <pre className="executionOutput" aria-live="polite">{lines.join("\n")}</pre>;
 }

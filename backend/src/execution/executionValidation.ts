@@ -13,7 +13,7 @@ export const executionLimits = {
   maxOutputSize: 50 * 1024,
   maxSourceSize: 100 * 1024,
   maxStdinSize: 10 * 1024,
-  timeoutMs: 5000
+  timeoutMs: 3000
 };
 
 type ValidationResult =

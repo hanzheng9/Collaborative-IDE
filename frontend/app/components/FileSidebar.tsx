@@ -1,3 +1,5 @@
+import { Add, Document, Edit, TrashCan } from "@carbon/icons-react";
+import { Button } from "@carbon/react";
 import type { WorkspaceFile } from "../types";
 
 type FileSidebarProps = {
@@ -31,9 +33,15 @@ export function FileSidebar({
     <>
       <div className="sidebarHeader">
         <span>Files</span>
-        <button type="button" onClick={onCreateFile}>
+        <Button
+          kind="ghost"
+          renderIcon={Add}
+          size="sm"
+          type="button"
+          onClick={onCreateFile}
+        >
           New
-        </button>
+        </Button>
       </div>
 
       <nav className="fileList" aria-label="Workspace files">
@@ -53,7 +61,10 @@ export function FileSidebar({
                 type="button"
                 onClick={() => onSelectFile(file.fileId)}
               >
-                <span className="fileIcon">{getFileIcon(file.fileName)}</span>
+                <span className="fileIcon" aria-hidden="true">
+                  <Document size={14} />
+                  {getFileIcon(file.fileName)}
+                </span>
                 <span className="fileName">{file.fileName}</span>
               </button>
               <button
@@ -63,21 +74,24 @@ export function FileSidebar({
                 type="button"
                 onClick={() => onDeleteFile(file)}
               >
-                Delete
+                <TrashCan size={14} />
               </button>
             </div>
           ))
         )}
       </nav>
 
-      <button
+      <Button
         className="renameButton"
+        kind="ghost"
+        renderIcon={Edit}
+        size="sm"
         type="button"
         disabled={!selectedFileId}
         onClick={onRenameFile}
       >
         Rename selected
-      </button>
+      </Button>
     </>
   );
 }

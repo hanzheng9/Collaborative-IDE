@@ -1,13 +1,17 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { ExecutionResult } from "../codeExecution";
 import { ExecutionOutput } from "./ExecutionOutput";
-import { ExecutionToolbar } from "./ExecutionToolbar";
+import { ExecutionToolbar, type BottomPanelTab } from "./ExecutionToolbar";
 import { StdinInput } from "./StdinInput";
 
 type ExecutionPanelProps = {
+  activeTab: BottomPanelTab;
   error: string;
+  isCollapsed: boolean;
   isRunning: boolean;
   onClear: () => void;
+  onTabChange: (tab: BottomPanelTab) => void;
+  onToggleCollapsed: () => void;
   onRun: () => void;
   onStop: () => void;
   result: ExecutionResult | null;
@@ -16,16 +20,19 @@ type ExecutionPanelProps = {
 };
 
 export function ExecutionPanel({
+  activeTab,
   error,
+  isCollapsed,
   isRunning,
   onClear,
   onRun,
   onStop,
+  onTabChange,
+  onToggleCollapsed,
   result,
   setStdin,
   stdin
 }: ExecutionPanelProps) {
-  const [activeTab, setActiveTab] = useState<"input" | "output">("output");
   const outputText = useMemo(
     () =>
       [
@@ -44,21 +51,29 @@ export function ExecutionPanel({
   };
 
   return (
-    <section className="executionPanel" aria-label="Code execution output">
+    <section className="executionPanel" aria-label="Lower panel">
       <ExecutionToolbar
         activeTab={activeTab}
         canStop={isRunning}
+        isCollapsed={isCollapsed}
         onClear={onClear}
         onCopy={copyOutput}
         onRun={onRun}
         onStop={onStop}
-        onTabChange={setActiveTab}
+        onTabChange={onTabChange}
+        onToggleCollapsed={onToggleCollapsed}
       />
-      {activeTab === "input" ? (
-        <StdinInput value={stdin} onChange={setStdin} />
-      ) : (
-        <ExecutionOutput error={error} isRunning={isRunning} result={result} />
-      )}
+      {!isCollapsed ? (
+        <div className="executionPanelBody">
+          {activeTab === "input" ? (
+            <StdinInput value={stdin} onChange={setStdin} />
+          ) : activeTab === "terminal" ? (
+            <ExecutionOutput error={error} isRunning={isRunning} result={result} />
+          ) : (
+            <ExecutionOutput error={error} isRunning={isRunning} result={result} />
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -11,6 +11,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@carbon/icons-react": "^11.84.0",
+    "@carbon/react": "^1.112.0",
     "@collaborative-ide/shared": "0.1.0",
     "@monaco-editor/react": "latest",
     "monaco-editor": "latest",

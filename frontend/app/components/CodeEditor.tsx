@@ -3,6 +3,7 @@ import type { WorkspaceFile } from "../types";
 
 type CodeEditorProps = {
   isMonacoReady: boolean;
+  monacoTheme: "vs" | "vs-dark";
   selectedFile: WorkspaceFile | null;
   readOnly: boolean;
   onChange: OnChange;
@@ -11,6 +12,7 @@ type CodeEditorProps = {
 
 export function CodeEditor({
   isMonacoReady,
+  monacoTheme,
   selectedFile,
   readOnly,
   onChange,
@@ -37,11 +39,12 @@ export function CodeEditor({
       onMount={onMount}
       onChange={onChange}
       loading={<div className="editorLoading">Loading editor...</div>}
-      theme="vs-dark"
+      theme={monacoTheme}
       options={{
         fontSize: 14,
+        lineNumbersMinChars: 4,
         minimap: { enabled: false },
-        padding: { top: 16 },
+        padding: { top: 12 },
         readOnly,
         readOnlyMessage: { value: "Reconnect to continue editing." },
         scrollBeyondLastLine: false,

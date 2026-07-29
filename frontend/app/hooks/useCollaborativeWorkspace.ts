@@ -1,7 +1,7 @@
 "use client";
 
 import { loader, type OnChange, type OnMount } from "@monaco-editor/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
   AppErrorPayload,
@@ -72,12 +72,14 @@ export function useCollaborativeWorkspace(workspaceId: string) {
   const jumpTargetRef = useRef<Collaborator | null>(null);
   const currentCursorRef = useRef<CursorPosition | null>(null);
   const lastCursorEmitRef = useRef(0);
+  const layoutFrameRef = useRef<number | null>(null);
   const [isMonacoReady, setIsMonacoReady] = useState(false);
   const [isWorkspaceLoaded, setIsWorkspaceLoaded] = useState(false);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [localUserId, setLocalUserId] = useState<string | null>(null);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [cursorPosition, setCursorPosition] = useState<CursorPosition | null>(null);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatusValue>("connecting");
   const [syncStatus, setSyncStatus] = useState<SyncStatusValue>("syncing");
@@ -85,6 +87,17 @@ export function useCollaborativeWorkspace(workspaceId: string) {
 
   const selectedFile =
     files.find((file) => file.fileId === selectedFileId) ?? null;
+
+  const relayoutEditor = useCallback(() => {
+    if (layoutFrameRef.current !== null) {
+      cancelAnimationFrame(layoutFrameRef.current);
+    }
+
+    layoutFrameRef.current = requestAnimationFrame(() => {
+      layoutFrameRef.current = null;
+      editorRef.current?.layout();
+    });
+  }, []);
 
   const showFeedback = (message: string) => {
     setFeedbackMessage(message);
@@ -319,6 +332,9 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     });
 
     return () => {
+      if (layoutFrameRef.current !== null) {
+        cancelAnimationFrame(layoutFrameRef.current);
+      }
       cursorListenerRef.current?.dispose();
       socket.io.off("reconnect_attempt");
       socket.io.off("reconnect_failed");
@@ -462,6 +478,7 @@ export function useCollaborativeWorkspace(workspaceId: string) {
         lineNumber: event.position.lineNumber,
         column: event.position.column
       };
+      setCursorPosition(currentCursorRef.current);
 
       const now = Date.now();
 
@@ -570,21 +587,15 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     }
 
     if (selection.fileId !== selectedFileIdRef.current) {
-      const shouldContinue = window.confirm(
-        "The selected file changed after this AI request started. Replace the original selection anyway?"
-      );
-
-      if (!shouldContinue) {
-        return { ok: false as const, error: "Replacement cancelled." };
-      }
+      return {
+        ok: false as const,
+        error: "The selected file changed after this AI request started."
+      };
     } else if (!rangesMatch(selection.range, currentSelection)) {
-      const shouldContinue = window.confirm(
-        "The editor selection changed after this AI request started. Replace the original selection anyway?"
-      );
-
-      if (!shouldContinue) {
-        return { ok: false as const, error: "Replacement cancelled." };
-      }
+      return {
+        ok: false as const,
+        error: "The editor selection changed after this AI request started."
+      };
     }
 
     editor.pushUndoStop();
@@ -744,6 +755,7 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     collaborators,
     connectionStatus,
     createFile,
+    cursorPosition,
     deleteFile,
     feedbackMessage,
     files,
@@ -754,6 +766,7 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     isWorkspaceLoaded,
     jumpToCollaborator,
     localUserId,
+    relayoutEditor,
     renameFile,
     selectedFile,
     selectedFileId,

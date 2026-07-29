@@ -1,3 +1,4 @@
+import { InlineNotification, Modal } from "@carbon/react";
 import { useEffect, useState } from "react";
 import type { WorkspaceFile } from "../types";
 
@@ -21,54 +22,30 @@ export function DeleteFileDialog({
   }, [file.fileId]);
 
   return (
-    <div
-      className="dialogBackdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !isPending) {
+    <Modal
+      danger
+      modalHeading="Delete file"
+      open
+      primaryButtonDisabled={isPending}
+      primaryButtonText={isPending ? "Deleting..." : "Delete"}
+      secondaryButtonText="Cancel"
+      onRequestClose={() => {
+        if (!isPending) {
           onCancel();
         }
       }}
+      onRequestSubmit={() => {
+        setError("");
+        onConfirm();
+      }}
     >
-      <div
-        aria-modal="true"
-        className="fileDialog"
-        role="dialog"
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && !isPending) {
-            event.preventDefault();
-            onCancel();
-          }
-
-          if (event.key === "Enter" && !isPending) {
-            event.preventDefault();
-            onConfirm();
-          }
-        }}
-      >
-        <h2>Delete file</h2>
-        <p className="dialogCopy">
-          Delete <strong>{file.fileName}</strong>? This removes it from the
-          current backend session for everyone in the workspace.
-        </p>
-        {error ? <p className="dialogError">{error}</p> : null}
-        <div className="dialogActions">
-          <button type="button" disabled={isPending} onClick={onCancel}>
-            Cancel
-          </button>
-          <button
-            className="dangerButton"
-            type="button"
-            disabled={isPending}
-            onClick={() => {
-              setError("");
-              onConfirm();
-            }}
-          >
-            {isPending ? "Deleting..." : "Delete"}
-          </button>
-        </div>
-      </div>
-    </div>
+      <p className="dialogCopy">
+        Delete <strong>{file.fileName}</strong>? This removes it from the
+        current backend session for everyone in the workspace.
+      </p>
+      {error ? (
+        <InlineNotification hideCloseButton kind="error" lowContrast title={error} />
+      ) : null}
+    </Modal>
   );
 }

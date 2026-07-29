@@ -1,42 +1,63 @@
+import { ChevronDown, ChevronUp } from "@carbon/icons-react";
+
+export type BottomPanelTab = "input" | "output" | "terminal";
+
 type ExecutionToolbarProps = {
-  activeTab: "input" | "output";
+  activeTab: BottomPanelTab;
   canStop: boolean;
+  isCollapsed: boolean;
   onClear: () => void;
   onCopy: () => void;
+  onToggleCollapsed: () => void;
   onRun: () => void;
   onStop: () => void;
-  onTabChange: (tab: "input" | "output") => void;
+  onTabChange: (tab: BottomPanelTab) => void;
 };
 
 export function ExecutionToolbar({
   activeTab,
   canStop,
+  isCollapsed,
   onClear,
   onCopy,
   onRun,
   onStop,
-  onTabChange
+  onTabChange,
+  onToggleCollapsed
 }: ExecutionToolbarProps) {
   return (
     <div className="executionToolbar">
-      <div className="executionTabs">
+      <div className="executionTabs" role="tablist" aria-label="Bottom panel">
         <button
+          aria-selected={activeTab === "input"}
+          className={activeTab === "input" ? "active" : ""}
+          role="tab"
+          type="button"
+          onClick={() => onTabChange("input")}
+        >
+          Input
+        </button>
+        <button
+          aria-selected={activeTab === "output"}
           className={activeTab === "output" ? "active" : ""}
+          role="tab"
           type="button"
           onClick={() => onTabChange("output")}
         >
           Output
         </button>
         <button
-          className={activeTab === "input" ? "active" : ""}
+          aria-selected={activeTab === "terminal"}
+          className={activeTab === "terminal" ? "active" : ""}
+          role="tab"
           type="button"
-          onClick={() => onTabChange("input")}
+          onClick={() => onTabChange("terminal")}
         >
-          Input
+          Terminal
         </button>
       </div>
       <div className="executionActions">
-        <button type="button" onClick={onRun}>
+        <button aria-label="Run code from lower panel" type="button" onClick={onRun}>
           Run Code
         </button>
         <button disabled={!canStop} type="button" onClick={onStop}>
@@ -47,6 +68,15 @@ export function ExecutionToolbar({
         </button>
         <button type="button" onClick={onClear}>
           Clear
+        </button>
+        <button
+          aria-label={isCollapsed ? "Expand lower panel" : "Collapse lower panel"}
+          title={isCollapsed ? "Expand lower panel" : "Collapse lower panel"}
+          type="button"
+          onClick={onToggleCollapsed}
+        >
+          {isCollapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          {isCollapsed ? "Expand" : "Collapse"}
         </button>
       </div>
     </div>

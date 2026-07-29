@@ -1,3 +1,4 @@
+import { InlineNotification, Modal, TextInput } from "@carbon/react";
 import { useEffect, useId, useState } from "react";
 import type { WorkspaceFile } from "../types";
 
@@ -52,48 +53,42 @@ export function FileDialog({
   };
 
   return (
-    <div
-      className="dialogBackdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onCancel();
-        }
-      }}
+    <Modal
+      modalHeading={title}
+      open
+      primaryButtonText={actionLabel}
+      secondaryButtonText="Cancel"
+      selectorPrimaryFocus={`#${inputId}`}
+      onRequestClose={onCancel}
+      onRequestSubmit={validateAndSubmit}
     >
       <form
-        className="fileDialog"
+        className="modalForm"
         onSubmit={(event) => {
           event.preventDefault();
           validateAndSubmit();
         }}
       >
-        <h2>{title}</h2>
-        <label htmlFor={inputId}>Filename</label>
-        <input
+        <TextInput
           autoFocus
           id={inputId}
+          labelText="Filename"
+          placeholder="main.ts"
           value={value}
           onChange={(event) => {
             setValue(event.target.value);
             setError("");
           }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              onCancel();
-            }
-          }}
-          placeholder="main.ts"
         />
-        {error ? <p className="dialogError">{error}</p> : null}
-        <div className="dialogActions">
-          <button type="button" onClick={onCancel}>
-            Cancel
-          </button>
-          <button type="submit">{actionLabel}</button>
-        </div>
+        {error ? (
+          <InlineNotification
+            hideCloseButton
+            kind="error"
+            lowContrast
+            title={error}
+          />
+        ) : null}
       </form>
-    </div>
+    </Modal>
   );
 }
