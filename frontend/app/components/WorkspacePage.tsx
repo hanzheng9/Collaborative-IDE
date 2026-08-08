@@ -6,9 +6,11 @@ import {
   ChevronRight,
   Play,
   Share,
-  StopFilledAlt
+  StopFilledAlt,
+  Logout
 } from "@carbon/icons-react";
-import { Button, Tag, Theme, ToastNotification } from "@carbon/react";
+import { Button, Modal, Tag, Theme, ToastNotification } from "@carbon/react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   CSSProperties,
@@ -16,6 +18,7 @@ import type {
   PointerEvent as ReactPointerEvent
 } from "react";
 import {
+  getExecutionStatusLabel,
   isExecutableLanguage,
   runCode,
   type ExecutionResult
@@ -23,6 +26,7 @@ import {
 import { useCollaborativeWorkspace } from "../hooks/useCollaborativeWorkspace";
 import { useThemePreference } from "../hooks/useThemePreference";
 import type { WorkspaceFile } from "../types";
+import { createWorkspaceId, getWorkspacePath } from "../workspaceRouter";
 import { AiAssistantPanel } from "./AiAssistantPanel";
 import { CodeEditor } from "./CodeEditor";
 import { CollaboratorList } from "./CollaboratorList";
@@ -33,6 +37,7 @@ import type { BottomPanelTab } from "./ExecutionToolbar";
 import { FileDialog } from "./FileDialog";
 import { FileSidebar } from "./FileSidebar";
 import { StatusBar } from "./StatusBar";
+import { TerminalInfoModal } from "./TerminalInfoModal";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 
 type FileDialogState =
@@ -95,6 +100,7 @@ function getSavedPanelTab(): BottomPanelTab {
 }
 
 export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
+  const router = useRouter();
   const {
     carbonTheme,
     monacoTheme,
@@ -115,6 +121,7 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
     isMonacoReady,
     isWorkspaceLoaded,
     jumpToCollaborator,
+    leaveWorkspace,
     localUserId,
     relayoutEditor,
     renameFile,
@@ -123,7 +130,8 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
     selectFile,
     showFeedback,
     syncStatus,
-    replaceAiSelection
+    replaceAiSelection,
+    workspaceError
   } = useCollaborativeWorkspace(workspaceId);
   const executionAbortRef = useRef<AbortController | null>(null);
   const executionRequestIdRef = useRef(0);
@@ -143,6 +151,9 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
   const [fileDialog, setFileDialog] = useState<FileDialogState>(null);
   const [deleteTarget, setDeleteTarget] = useState<WorkspaceFile | null>(null);
   const [isDeletePending, setIsDeletePending] = useState(false);
+  const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
+  const [isLeavingWorkspace, setIsLeavingWorkspace] = useState(false);
+  const [isTerminalInfoOpen, setIsTerminalInfoOpen] = useState(false);
 
   useEffect(() => {
     previousExpandedPanelHeightRef.current = panelHeight;
@@ -155,6 +166,37 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
     } catch {
       showFeedback("Could not copy the workspace link.");
     }
+  };
+
+  const handleLeaveWorkspace = () => {
+    setIsLeaveDialogOpen(true);
+  };
+
+  const cancelLeaveWorkspace = () => {
+    if (isLeavingWorkspace) {
+      return;
+    }
+
+    setIsLeaveDialogOpen(false);
+  };
+
+  const confirmLeaveWorkspace = () => {
+    if (isLeavingWorkspace) {
+      return;
+    }
+
+    setIsLeavingWorkspace(true);
+    leaveWorkspace();
+    router.push("/");
+  };
+
+  const createNewWorkspace = () => {
+    const nextWorkspaceId = createWorkspaceId();
+    window.sessionStorage.setItem(
+      `collaborativeIde.createWorkspace.${nextWorkspaceId}`,
+      "true"
+    );
+    router.push(getWorkspacePath(nextWorkspaceId));
   };
 
   const handleDeleteFile = () => {
@@ -408,6 +450,48 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
     setExecutionResult(null);
   };
 
+  const runTerminalCommand = async (command: string) => {
+    const parts = command.trim().split(/\s+/);
+    const runtime = parts[0];
+    const requestedFileName =
+      runtime === "npx" && parts[1] === "tsx" ? parts[2] : parts[1];
+    const file = files.find((workspaceFile) => {
+      if (!requestedFileName) {
+        return false;
+      }
+
+      return (
+        workspaceFile.fileName === requestedFileName ||
+        workspaceFile.fileId === requestedFileName
+      );
+    });
+
+    if (!file) {
+      return `File not found: ${requestedFileName ?? ""}`;
+    }
+
+    if (!isExecutableLanguage(file.language)) {
+      return `This file language is not supported for code execution.`;
+    }
+
+    const result = await runCode(
+      workspaceId,
+      file,
+      files,
+      stdin,
+      new AbortController().signal
+    );
+    const output = [
+      getExecutionStatusLabel(result.status),
+      result.exitCode !== undefined ? `Exit code: ${result.exitCode}` : "",
+      result.stdout ? `Standard output:\n${result.stdout}` : "",
+      result.stderr ? `Standard error:\n${result.stderr}` : "",
+      result.compileOutput ? `Compilation output:\n${result.compileOutput}` : ""
+    ].filter(Boolean);
+
+    return output.join("\n");
+  };
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -459,7 +543,7 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
                   title={collaborator.displayName}
                   style={{ backgroundColor: collaborator.color }}
                 >
-                  {collaborator.displayName.replace("User ", "")}
+                  {collaborator.displayName}
                 </span>
               ))}
             </div>
@@ -506,6 +590,15 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
               value={themePreference}
               onChange={setThemePreference}
             />
+            <Button
+              kind="ghost"
+              renderIcon={Logout}
+              size="sm"
+              type="button"
+              onClick={handleLeaveWorkspace}
+            >
+              Leave Workspace
+            </Button>
           </div>
         </header>
 
@@ -523,6 +616,24 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
           </div>
         ) : null}
 
+        {workspaceError?.code === "WORKSPACE_NOT_FOUND" ? (
+          <section className="expiredWorkspace" aria-labelledby="expired-workspace-title">
+            <h2 id="expired-workspace-title">
+              This workspace no longer exists or has expired.
+            </h2>
+            <p>
+              Workspaces are automatically removed after 30 days of inactivity.
+            </p>
+            <div className="expiredWorkspaceActions">
+              <Button type="button" onClick={createNewWorkspace}>
+                Create New Workspace
+              </Button>
+              <Button kind="secondary" type="button" onClick={() => router.push("/")}>
+                Back Home
+              </Button>
+            </div>
+          </section>
+        ) : (
         <div
           className={[
             "workspace",
@@ -622,13 +733,16 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
             <ExecutionPanel
               activeTab={panelTab}
               error={executionError}
+              files={files}
               isCollapsed={isPanelCollapsed}
               isRunning={isRunningCode}
               result={executionResult}
               stdin={stdin}
               setStdin={setStdin}
               onClear={clearExecutionOutput}
+              onOpenTerminalInfo={() => setIsTerminalInfoOpen(true)}
               onRun={() => void runSelectedFile()}
+              onRunTerminalCommand={runTerminalCommand}
               onStop={stopExecution}
               onTabChange={selectPanelTab}
               onToggleCollapsed={togglePanelCollapsed}
@@ -643,6 +757,7 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
             />
           ) : null}
         </div>
+        )}
 
         <StatusBar
           collaborators={collaborators}
@@ -686,6 +801,36 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
           }}
           onConfirm={handleDeleteFile}
         />
+      ) : null}
+
+      {isLeaveDialogOpen ? (
+        <Modal
+          danger
+          modalHeading="Leave workspace?"
+          open
+          primaryButtonDisabled={isLeavingWorkspace}
+          primaryButtonText={
+            isLeavingWorkspace ? "Leaving..." : "Leave Workspace"
+          }
+          secondaryButtonText="Cancel"
+          onRequestClose={cancelLeaveWorkspace}
+          onRequestSubmit={confirmLeaveWorkspace}
+        >
+          <p className="dialogCopy">
+            You will disconnect from this workspace, but the workspace and its
+            files will remain available through its shared link.
+          </p>
+          {syncStatus === "unsaved" ? (
+            <p className="dialogWarning">
+              Some changes may not be synchronized yet. Leaving now could
+              discard those local changes.
+            </p>
+          ) : null}
+        </Modal>
+      ) : null}
+
+      {isTerminalInfoOpen ? (
+        <TerminalInfoModal onClose={() => setIsTerminalInfoOpen(false)} />
       ) : null}
       </main>
     </Theme>

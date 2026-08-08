@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "@carbon/styles/css/styles.css";
 import "./ideTokens.css";
 import "./globals.css";
@@ -33,7 +34,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        <Script
+          id="theme-boot"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeBootScript }}
+        />
         {children}
       </body>
     </html>

@@ -6,6 +6,7 @@ export type CodeChangePayload = {
 
 export type JoinWorkspacePayload = {
   workspaceId: string;
+  createIfMissing?: boolean;
 };
 
 export type CreateFilePayload = {
@@ -110,6 +111,7 @@ export type OperationAck =
 
 export type ClientToServerEvents = {
   "join-workspace": (payload: JoinWorkspacePayload) => void;
+  "leave-workspace": () => void;
   "create-file": (
     payload: CreateFilePayload,
     ack?: (payload: OperationAck) => void

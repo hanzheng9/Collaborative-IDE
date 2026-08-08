@@ -111,24 +111,27 @@ textarea:focus-visible,
 .avatarStack {
   display: flex;
   align-items: center;
+  gap: 4px;
   margin-left: 2px;
 }
 
 .avatarDot {
-  display: grid;
-  width: 22px;
+  display: inline-flex;
+  max-width: 96px;
+  min-width: 0;
   height: 22px;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   border: 2px solid var(--ide-surface);
   border-radius: 999px;
   color: #ffffff;
   font-size: 10px;
   font-weight: 700;
-  margin-left: -6px;
-}
-
-.avatarDot:first-child {
-  margin-left: 0;
+  line-height: 1;
+  overflow: hidden;
+  padding: 0 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .notificationLayer {
@@ -215,6 +218,83 @@ textarea:focus-visible,
   gap: 8px;
 }
 
+.recentWorkspaces {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.recentWorkspacesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.recentWorkspacesHeader h2 {
+  margin: 0;
+  color: var(--ide-text);
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.recentWorkspaceList {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recentWorkspaceItem {
+  display: grid;
+  align-items: center;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  border: 1px solid var(--ide-border);
+  border-radius: var(--ide-radius);
+  background: var(--ide-surface-subtle);
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease;
+}
+
+.recentWorkspaceItem:hover {
+  border-color: var(--ide-border-strong);
+  background: var(--ide-surface-hover);
+}
+
+.recentWorkspaceOpen {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--ide-text);
+  cursor: pointer;
+  font: inherit;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.recentWorkspaceName,
+.recentWorkspaceMeta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recentWorkspaceName {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.recentWorkspaceMeta {
+  color: var(--ide-text-subtle);
+  font-size: 12px;
+}
+
 .workspace {
   display: grid;
   min-width: 0;
@@ -232,6 +312,40 @@ textarea:focus-visible,
 
 .workspace.withAiPanel.sidebarCollapsed {
   grid-template-columns: 36px minmax(0, 1fr) minmax(320px, 380px);
+}
+
+.expiredWorkspace {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  background: var(--ide-surface);
+  color: var(--ide-text);
+  padding: 24px;
+  text-align: center;
+}
+
+.expiredWorkspace h2 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0;
+}
+
+.expiredWorkspace p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--ide-text-muted);
+  line-height: 1.5;
+}
+
+.expiredWorkspaceActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 .sidebar {
@@ -812,6 +926,87 @@ textarea:focus-visible,
     color 180ms ease;
 }
 
+.terminalView {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--ide-terminal-bg);
+  color: var(--ide-terminal-text);
+  font-family: var(--ide-font-mono);
+}
+
+.terminalTranscript {
+  flex: 0 0 auto;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.terminalPrompt {
+  display: grid;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  color: var(--ide-terminal-text);
+  padding: 0 12px 12px;
+}
+
+.terminalPrompt input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+}
+
+.terminalInfo {
+  display: grid;
+  max-height: min(56vh, 520px);
+  gap: 18px;
+  overflow: auto;
+  color: var(--ide-text);
+}
+
+.terminalInfo h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.terminalInfo p,
+.terminalInfo ul {
+  margin: 0;
+  color: var(--ide-text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.terminalInfo ul {
+  padding-left: 20px;
+}
+
+.terminalInfo pre {
+  overflow: auto;
+  border: 1px solid var(--ide-border);
+  border-radius: var(--ide-radius);
+  background: var(--ide-surface-subtle);
+  color: var(--ide-code-text);
+  font-family: var(--ide-font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 10px 0 0;
+  padding: 10px;
+}
+
 .errorOutput {
   color: var(--ide-terminal-error);
 }
@@ -819,6 +1014,13 @@ textarea:focus-visible,
 .dialogCopy {
   margin: 0;
   color: var(--ide-text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.dialogWarning {
+  margin: 12px 0 0;
+  color: var(--ide-danger);
   font-size: 14px;
   line-height: 1.5;
 }

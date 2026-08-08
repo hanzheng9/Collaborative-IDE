@@ -20,6 +20,10 @@ import type {
   WorkspaceFile,
   WorkspaceStatePayload
 } from "../types";
+import {
+  addRecentWorkspace,
+  removeRecentWorkspace
+} from "../utils/recentWorkspaces";
 
 const backendUrl = "http://localhost:4000";
 const cursorEmitThrottleMs = 80;
@@ -73,6 +77,7 @@ export function useCollaborativeWorkspace(workspaceId: string) {
   const currentCursorRef = useRef<CursorPosition | null>(null);
   const lastCursorEmitRef = useRef(0);
   const layoutFrameRef = useRef<number | null>(null);
+  const intentionalLeaveRef = useRef(false);
   const [isMonacoReady, setIsMonacoReady] = useState(false);
   const [isWorkspaceLoaded, setIsWorkspaceLoaded] = useState(false);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
@@ -84,6 +89,9 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     useState<ConnectionStatusValue>("connecting");
   const [syncStatus, setSyncStatus] = useState<SyncStatusValue>("syncing");
   const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [workspaceError, setWorkspaceError] = useState<AppErrorPayload | null>(
+    null
+  );
 
   const selectedFile =
     files.find((file) => file.fileId === selectedFileId) ?? null;
@@ -177,7 +185,12 @@ export function useCollaborativeWorkspace(workspaceId: string) {
       setConnectionStatus("connected");
       setSyncStatus("syncing");
       setLocalUserId(socket.id ?? null);
-      socket.emit("join-workspace", { workspaceId });
+      const createMarkerKey = `collaborativeIde.createWorkspace.${workspaceId}`;
+      const createIfMissing =
+        window.sessionStorage.getItem(createMarkerKey) === "true";
+
+      socket.emit("join-workspace", { workspaceId, createIfMissing });
+      window.sessionStorage.removeItem(createMarkerKey);
     });
 
     socket.io.on("reconnect_attempt", () => {
@@ -188,7 +201,9 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     socket.on("disconnect", () => {
       setConnectionStatus("disconnected");
       setSyncStatus("connection-lost");
-      showFeedback("Connection lost. Editing is paused until reconnect.");
+      if (!intentionalLeaveRef.current) {
+        showFeedback("Connection lost. Editing is paused until reconnect.");
+      }
     });
 
     socket.io.on("reconnect_failed", () => {
@@ -203,6 +218,12 @@ export function useCollaborativeWorkspace(workspaceId: string) {
       }
 
       setFiles(payload.files);
+      addRecentWorkspace({
+        workspaceId,
+        name: "Untitled Workspace",
+        lastFileName: payload.files[0]?.fileName
+      });
+      setWorkspaceError(null);
       editorViewStatesRef.current.forEach((_value, fileId) => {
         const fileStillExists = payload.files.some((file) => file.fileId === fileId);
 
@@ -320,6 +341,15 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     });
 
     socket.on("workspace-error", (payload: AppErrorPayload) => {
+      if (payload.code === "WORKSPACE_NOT_FOUND") {
+        removeRecentWorkspace(workspaceId);
+      }
+
+      setWorkspaceError(payload);
+      setIsWorkspaceLoaded(false);
+      setFiles([]);
+      setSelectedFileId(null);
+      setCollaborators([]);
       showFeedback(payload.message);
     });
 
@@ -686,6 +716,26 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     socketRef.current.emit("delete-file", { workspaceId, fileId }, onComplete);
   };
 
+  const leaveWorkspace = () => {
+    intentionalLeaveRef.current = true;
+    socketRef.current?.emit("leave-workspace");
+    socketRef.current?.disconnect();
+    cursorListenerRef.current?.dispose();
+    remoteCursorDecorationIdsRef.current = editorRef.current
+      ? editorRef.current.deltaDecorations(remoteCursorDecorationIdsRef.current, [])
+      : [];
+    editorViewStatesRef.current.clear();
+    filesRef.current = [];
+    currentCursorRef.current = null;
+    setCollaborators([]);
+    setCursorPosition(null);
+    setFiles([]);
+    setIsWorkspaceLoaded(false);
+    setLocalUserId(null);
+    setSelectedFileId(null);
+    setSyncStatus("synced");
+  };
+
   const jumpToCollaborator = (collaborator: Collaborator) => {
     const cursorPosition = collaborator.cursorPosition;
     const fileExists = files.some(
@@ -765,6 +815,7 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     isMonacoReady,
     isWorkspaceLoaded,
     jumpToCollaborator,
+    leaveWorkspace,
     localUserId,
     relayoutEditor,
     renameFile,
@@ -773,6 +824,7 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     selectFile,
     showFeedback,
     syncStatus,
-    replaceAiSelection
+    replaceAiSelection,
+    workspaceError
   };
 }

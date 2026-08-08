@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronUp } from "@carbon/icons-react";
+import { ChevronDown, ChevronUp, Information } from "@carbon/icons-react";
+import { Button } from "@carbon/react";
 
 export type BottomPanelTab = "input" | "output" | "terminal";
 
@@ -8,6 +9,7 @@ type ExecutionToolbarProps = {
   isCollapsed: boolean;
   onClear: () => void;
   onCopy: () => void;
+  onOpenTerminalInfo: () => void;
   onToggleCollapsed: () => void;
   onRun: () => void;
   onStop: () => void;
@@ -20,6 +22,7 @@ export function ExecutionToolbar({
   isCollapsed,
   onClear,
   onCopy,
+  onOpenTerminalInfo,
   onRun,
   onStop,
   onTabChange,
@@ -55,6 +58,16 @@ export function ExecutionToolbar({
         >
           Terminal
         </button>
+        <Button
+          hasIconOnly
+          iconDescription="Terminal capabilities"
+          kind="ghost"
+          renderIcon={Information}
+          size="sm"
+          tooltipPosition="bottom"
+          type="button"
+          onClick={onOpenTerminalInfo}
+        />
       </div>
       <div className="executionActions">
         <button aria-label="Run code from lower panel" type="button" onClick={onRun}>

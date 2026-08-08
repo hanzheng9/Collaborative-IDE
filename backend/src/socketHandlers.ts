@@ -92,6 +92,19 @@ export function registerSocketHandlers(
     });
   }
 
+  function removeCollaboratorFromWorkspace(socket: TypedSocket) {
+    const workspaceId = collaborators.removeCollaborator(socket.id);
+
+    if (!workspaceId) {
+      return null;
+    }
+
+    socket.leave(workspaceId);
+    broadcastCollaborators(workspaceId);
+
+    return workspaceId;
+  }
+
   function moveCollaboratorsOffDeletedFile(
     workspaceId: string,
     deletedFileId: string,
@@ -128,7 +141,20 @@ export function registerSocketHandlers(
       }
 
       try {
-        await workspaceService.loadWorkspace(payload.workspaceId);
+        const result = await workspaceService.loadWorkspace(payload.workspaceId, {
+          createIfMissing: payload.createIfMissing
+        });
+
+        if (!result.ok) {
+          typedSocket.emit(
+            "workspace-error",
+            createError(result.code, result.error, {
+              operation: "join-workspace",
+              workspaceId: payload.workspaceId
+            })
+          );
+          return;
+        }
       } catch (error) {
         logger.error("workspace load failed", {
           socketId: typedSocket.id,
@@ -144,6 +170,7 @@ export function registerSocketHandlers(
         return;
       }
 
+      removeCollaboratorFromWorkspace(typedSocket);
       typedSocket.join(payload.workspaceId);
       const workspaceState = workspaceService.getWorkspaceState(payload.workspaceId);
       const firstFileId = workspaceState.files[0]?.fileId ?? "main.ts";
@@ -155,6 +182,15 @@ export function registerSocketHandlers(
         fileCount: workspaceState.files.length,
         socketId: typedSocket.id,
         workspaceId: payload.workspaceId
+      });
+    });
+
+    typedSocket.on("leave-workspace", () => {
+      const workspaceId = removeCollaboratorFromWorkspace(typedSocket);
+
+      logger.info("workspace left", {
+        socketId: typedSocket.id,
+        workspaceId
       });
     });
 
@@ -366,19 +402,13 @@ export function registerSocketHandlers(
     });
 
     typedSocket.on("disconnect", (reason) => {
-      const workspaceId = collaborators.removeCollaborator(typedSocket.id);
+      const workspaceId = removeCollaboratorFromWorkspace(typedSocket);
 
       logger.info("socket disconnected", {
         reason,
         socketId: typedSocket.id,
         workspaceId
       });
-
-      if (!workspaceId) {
-        return;
-      }
-
-      broadcastCollaborators(workspaceId);
     });
   });
 

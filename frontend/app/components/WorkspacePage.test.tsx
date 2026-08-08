@@ -5,6 +5,8 @@ import { runCode } from "../codeExecution";
 import { useCollaborativeWorkspace } from "../hooks/useCollaborativeWorkspace";
 import { WorkspacePage } from "./WorkspacePage";
 
+const pushMock = vi.fn();
+
 vi.mock("../codeExecution", async () => {
   const actual = await vi.importActual<typeof import("../codeExecution")>(
     "../codeExecution"
@@ -18,6 +20,12 @@ vi.mock("../codeExecution", async () => {
 
 vi.mock("../hooks/useCollaborativeWorkspace", () => ({
   useCollaborativeWorkspace: vi.fn()
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: pushMock
+  })
 }));
 
 vi.mock("./CodeEditor", () => ({
@@ -37,7 +45,11 @@ const file = {
 
 const defaultMatchMedia = window.matchMedia;
 
-function mockWorkspace(selectedFile: typeof file | null = file) {
+function mockWorkspace(
+  selectedFile: typeof file | null = file,
+  options: { syncStatus?: "synced" | "syncing" | "unsaved" | "connection-lost" } = {}
+) {
+  const leaveWorkspace = vi.fn();
   vi.mocked(useCollaborativeWorkspace).mockReturnValue({
     collaborators: [],
     connectionStatus: "connected",
@@ -52,6 +64,7 @@ function mockWorkspace(selectedFile: typeof file | null = file) {
     isMonacoReady: true,
     isWorkspaceLoaded: true,
     jumpToCollaborator: vi.fn(),
+    leaveWorkspace,
     localUserId: "local",
     relayoutEditor: vi.fn(),
     renameFile: vi.fn(),
@@ -60,8 +73,11 @@ function mockWorkspace(selectedFile: typeof file | null = file) {
     selectedFileId: selectedFile?.fileId ?? null,
     selectFile: vi.fn(),
     showFeedback: vi.fn(),
-    syncStatus: "synced"
+    syncStatus: options.syncStatus ?? "synced",
+    workspaceError: null
   });
+
+  return { leaveWorkspace };
 }
 
 describe("WorkspacePage execution", () => {
@@ -142,6 +158,27 @@ describe("WorkspacePage execution", () => {
     expect(
       screen.getByRole("separator", { name: /resize lower panel/i })
     ).toBeInTheDocument();
+  });
+
+  it("opens and closes terminal capabilities", async () => {
+    mockWorkspace();
+
+    render(<WorkspacePage workspaceId="workspace-1" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /terminal capabilities/i })
+    );
+
+    expect(
+      screen.getByRole("heading", { name: /terminal capabilities/i })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/supported features/i)).toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("heading", { name: /terminal capabilities/i })
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("keeps the lower panel tab bar visible while collapsed", async () => {
@@ -243,5 +280,115 @@ describe("WorkspacePage execution", () => {
       "data-monaco-theme",
       "vs"
     );
+  });
+
+  it("opens a confirmation before leaving the workspace", async () => {
+    const { leaveWorkspace } = mockWorkspace();
+
+    render(<WorkspacePage workspaceId="workspace-1" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /leave workspace/i })
+    );
+
+    expect(screen.getByText(/you will disconnect from this workspace/i)).toBeInTheDocument();
+    expect(leaveWorkspace).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("cancels leaving the workspace", async () => {
+    const { leaveWorkspace } = mockWorkspace();
+
+    render(<WorkspacePage workspaceId="workspace-1" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /leave workspace/i })
+    );
+    await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
+
+    expect(screen.queryByText(/you will disconnect from this workspace/i)).not.toBeInTheDocument();
+    expect(leaveWorkspace).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("cancels leaving with Escape", async () => {
+    const { leaveWorkspace } = mockWorkspace();
+
+    render(<WorkspacePage workspaceId="workspace-1" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /leave workspace/i })
+    );
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.queryByText(/you will disconnect from this workspace/i)).not.toBeInTheDocument();
+    expect(leaveWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("confirms leaving the workspace and navigates home", async () => {
+    const { leaveWorkspace } = mockWorkspace();
+
+    render(<WorkspacePage workspaceId="workspace-1" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /leave workspace/i })
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /leave workspace/i }).at(-1)!
+    );
+
+    expect(leaveWorkspace).toHaveBeenCalledOnce();
+    expect(pushMock).toHaveBeenCalledWith("/");
+  });
+
+  it("shows a stronger warning when leaving with unsynced changes", async () => {
+    mockWorkspace(file, { syncStatus: "unsaved" });
+
+    render(<WorkspacePage workspaceId="workspace-1" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /leave workspace/i })
+    );
+
+    expect(
+      screen.getByText(/some changes may not be synchronized yet/i)
+    ).toBeInTheDocument();
+  });
+
+  it("shows an expired workspace state", async () => {
+    vi.mocked(useCollaborativeWorkspace).mockReturnValueOnce({
+      collaborators: [],
+      connectionStatus: "connected",
+      createFile: vi.fn(),
+      cursorPosition: null,
+      deleteFile: vi.fn(),
+      feedbackMessage: "",
+      files: [],
+      getAiSelection: vi.fn(),
+      handleEditorChange: vi.fn(),
+      handleEditorMount: vi.fn(),
+      isMonacoReady: true,
+      isWorkspaceLoaded: false,
+      jumpToCollaborator: vi.fn(),
+      leaveWorkspace: vi.fn(),
+      localUserId: null,
+      relayoutEditor: vi.fn(),
+      renameFile: vi.fn(),
+      replaceAiSelection: vi.fn(),
+      selectedFile: null,
+      selectedFileId: null,
+      selectFile: vi.fn(),
+      showFeedback: vi.fn(),
+      syncStatus: "synced",
+      workspaceError: {
+        code: "WORKSPACE_NOT_FOUND",
+        message: "Workspace not found or expired."
+      }
+    });
+
+    render(<WorkspacePage workspaceId="workspace-1" />);
+
+    expect(
+      screen.getByText(/this workspace no longer exists or has expired/i)
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: /back home/i })
+    );
+    expect(pushMock).toHaveBeenCalledWith("/");
   });
 });

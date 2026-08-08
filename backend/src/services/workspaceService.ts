@@ -10,7 +10,7 @@ import { WorkspaceStateStore } from "../workspaceState.js";
 import { DebouncedPersistence } from "./debouncedPersistence.js";
 
 export type WorkspacePersistence = {
-  loadWorkspace?: (workspaceId: string) => Promise<WorkspaceFile[] | null>;
+  loadWorkspace?: (workspaceId: string) => Promise<WorkspaceFile[] | null | undefined>;
   createWorkspace?: (
     workspaceId: string,
     files: WorkspaceFile[]
@@ -28,6 +28,7 @@ export type WorkspacePersistence = {
     content: string
   ) => Promise<void>;
   deleteFile?: (workspaceId: string, fileId: string) => Promise<void>;
+  touchWorkspace?: (workspaceId: string) => Promise<void>;
 };
 
 type WorkspaceServiceOptions = {
@@ -40,7 +41,7 @@ export class WorkspaceService {
   readonly workspaces: WorkspaceStateStore;
   private readonly contentPersistence: DebouncedPersistence;
   private readonly persistence: WorkspacePersistence;
-  private readonly workspaceLoadPromises = new Map<string, Promise<void>>();
+  private readonly workspaceLoadPromises = new Map<string, Promise<LoadWorkspaceResult>>();
 
   constructor(options: WorkspaceServiceOptions = {}) {
     this.workspaces = options.workspaces ?? new WorkspaceStateStore();
@@ -52,16 +53,19 @@ export class WorkspaceService {
     });
   }
 
-  async loadWorkspace(workspaceId: string) {
+  async loadWorkspace(
+    workspaceId: string,
+    options: { createIfMissing?: boolean } = {}
+  ): Promise<LoadWorkspaceResult> {
     if (this.workspaces.hasWorkspace(workspaceId)) {
-      return;
+      void this.touchWorkspaceActivity(workspaceId, "join-workspace");
+      return { ok: true };
     }
 
     const existingLoad = this.workspaceLoadPromises.get(workspaceId);
 
     if (existingLoad) {
-      await existingLoad;
-      return;
+      return existingLoad;
     }
 
     const loadPromise = (async () => {
@@ -79,16 +83,25 @@ export class WorkspaceService {
 
         if (files && files.length > 0) {
           this.workspaces.setWorkspaceFiles(workspaceId, files);
+          void this.touchWorkspaceActivity(workspaceId, "join-workspace");
           logger.info("workspace loaded from PostgreSQL", {
             fileCount: files.length,
             workspaceId
           });
-          return;
+          return { ok: true as const };
         }
 
-        const defaultFiles = Array.from(
-          this.workspaces.getWorkspaceFiles(workspaceId).values()
-        );
+        if (files === null && !options.createIfMissing) {
+          logger.info("workspace not found", { workspaceId });
+          return {
+            ok: false as const,
+            code: "WORKSPACE_NOT_FOUND" as const,
+            error: "Workspace not found or expired."
+          };
+        }
+
+        const defaultFiles = Array.from(this.workspaces.createDefaultWorkspace().values());
+        this.workspaces.setWorkspaceFiles(workspaceId, defaultFiles);
         try {
           await this.persistence.createWorkspace?.(workspaceId, defaultFiles);
         } catch (error) {
@@ -100,13 +113,18 @@ export class WorkspaceService {
           fileCount: defaultFiles.length,
           workspaceId
         });
+        return { ok: true as const };
       } finally {
         this.workspaceLoadPromises.delete(workspaceId);
       }
     })();
 
     this.workspaceLoadPromises.set(workspaceId, loadPromise);
-    await loadPromise;
+    return loadPromise;
+  }
+
+  getLoadedWorkspaceIds() {
+    return this.workspaces.getWorkspaceIds();
   }
 
   getWorkspaceState(workspaceId: string) {
@@ -237,4 +255,23 @@ export class WorkspaceService {
       this.contentPersistence.schedule({ fileId, workspaceId });
     }
   }
+
+  private async touchWorkspaceActivity(workspaceId: string, operation: string) {
+    if (!this.persistence.touchWorkspace) {
+      return;
+    }
+
+    try {
+      await this.persistence.touchWorkspace(workspaceId);
+    } catch (error) {
+      logger.error("failed to update workspace activity", {
+        operation,
+        workspaceId
+      });
+    }
+  }
 }
+
+export type LoadWorkspaceResult =
+  | { ok: true }
+  | { ok: false; code: "WORKSPACE_NOT_FOUND"; error: string };

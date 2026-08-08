@@ -54,6 +54,10 @@ export class WorkspaceStateStore {
     return this.workspaces.has(workspaceId);
   }
 
+  getWorkspaceIds() {
+    return Array.from(this.workspaces.keys());
+  }
+
   getWorkspaceFiles(workspaceId: string) {
     let files = this.workspaces.get(workspaceId);
 

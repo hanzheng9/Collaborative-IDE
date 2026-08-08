@@ -36,7 +36,11 @@ export function isJoinWorkspacePayload(payload: unknown): payload is JoinWorkspa
   return (
     typeof payload === "object" &&
     payload !== null &&
-    isValidWorkspaceId((payload as JoinWorkspacePayload).workspaceId)
+    isValidWorkspaceId((payload as JoinWorkspacePayload).workspaceId) &&
+    (
+      (payload as JoinWorkspacePayload).createIfMissing === undefined ||
+      typeof (payload as JoinWorkspacePayload).createIfMissing === "boolean"
+    )
   );
 }
 

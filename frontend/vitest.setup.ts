@@ -11,6 +11,7 @@ Object.assign(globalThis, {
 });
 
 const localStorageData = new Map<string, string>();
+const sessionStorageData = new Map<string, string>();
 
 Object.defineProperty(window, "localStorage", {
   configurable: true,
@@ -20,6 +21,18 @@ Object.defineProperty(window, "localStorage", {
     removeItem: (key: string) => localStorageData.delete(key),
     setItem: (key: string, value: string) => {
       localStorageData.set(key, value);
+    }
+  }
+});
+
+Object.defineProperty(window, "sessionStorage", {
+  configurable: true,
+  value: {
+    clear: () => sessionStorageData.clear(),
+    getItem: (key: string) => sessionStorageData.get(key) ?? null,
+    removeItem: (key: string) => sessionStorageData.delete(key),
+    setItem: (key: string, value: string) => {
+      sessionStorageData.set(key, value);
     }
   }
 });

@@ -376,4 +376,109 @@ describe("Socket.io collaboration", () => {
       expect.objectContaining({ userId: a.id })
     );
   });
+
+  it("removes collaborator presence on explicit leave without deleting files", async () => {
+    const a = client();
+    const b = client();
+    await Promise.all([waitForEvent(a, "connect"), waitForEvent(b, "connect")]);
+    a.emit("join-workspace", { workspaceId: "demo" });
+    b.emit("join-workspace", { workspaceId: "demo" });
+    await Promise.all([
+      waitForEvent(a, "workspace-state"),
+      waitForEvent(b, "workspace-state")
+    ]);
+
+    a.emit("cursor-change", {
+      workspaceId: "demo",
+      fileId: "main.ts",
+      cursorPosition: { lineNumber: 4, column: 2 }
+    });
+    await waitForEventWhere<{ collaborators: { userId: string }[] }>(
+      b,
+      "collaborators-state",
+      (payload) =>
+        payload.collaborators.some((collaborator) => collaborator.userId === a.id)
+    );
+
+    const leaveState = waitForEventWhere<{
+      collaborators: { userId: string; cursorPosition: unknown }[];
+    }>(
+      b,
+      "collaborators-state",
+      (payload) =>
+        payload.collaborators.length === 1 &&
+        !payload.collaborators.some((collaborator) => collaborator.userId === a.id)
+    );
+    a.emit("leave-workspace");
+
+    expect((await leaveState).collaborators).not.toContainEqual(
+      expect.objectContaining({ userId: a.id })
+    );
+    expect(workspaces.getWorkspaceState("demo").files).toHaveLength(1);
+    expect(workspaces.getWorkspaceState("demo").files[0]?.fileId).toBe("main.ts");
+  });
+
+  it("does not recreate a missing persisted workspace unless creation is explicit", async () => {
+    const localHttpServer = createServer(createApp());
+    const localIoServer = new Server(localHttpServer);
+    registerSocketHandlers(localIoServer, {
+      persistence: {
+        loadWorkspace: async () => null
+      }
+    });
+    await new Promise<void>((resolve) => localHttpServer.listen(0, resolve));
+    const address = localHttpServer.address() as AddressInfo;
+    const localSocket = createClient(`http://localhost:${address.port}`, {
+      forceNew: true,
+      reconnection: false
+    });
+
+    await waitForEvent(localSocket, "connect");
+    localSocket.emit("join-workspace", { workspaceId: "missing-room" });
+
+    expect(await waitForEvent<{ code: string; message: string }>(
+      localSocket,
+      "workspace-error"
+    )).toMatchObject({
+      code: "WORKSPACE_NOT_FOUND",
+      message: "Workspace not found or expired."
+    });
+    localSocket.disconnect();
+    await new Promise<void>((resolve) => localIoServer.close(() => resolve()));
+    await new Promise<void>((resolve) => localHttpServer.close(() => resolve()));
+  });
+
+  it("creates a missing workspace only when createIfMissing is true", async () => {
+    const localHttpServer = createServer(createApp());
+    const localIoServer = new Server(localHttpServer);
+    registerSocketHandlers(localIoServer, {
+      persistence: {
+        createWorkspace: async () => undefined,
+        loadWorkspace: async () => null
+      }
+    });
+    await new Promise<void>((resolve) => localHttpServer.listen(0, resolve));
+    const address = localHttpServer.address() as AddressInfo;
+    const localSocket = createClient(`http://localhost:${address.port}`, {
+      forceNew: true,
+      reconnection: false
+    });
+
+    await waitForEvent(localSocket, "connect");
+    localSocket.emit("join-workspace", {
+      workspaceId: "new-room",
+      createIfMissing: true
+    });
+
+    expect(await waitForEvent<{ workspaceId: string; files: unknown[] }>(
+      localSocket,
+      "workspace-state"
+    )).toMatchObject({
+      workspaceId: "new-room",
+      files: expect.any(Array)
+    });
+    localSocket.disconnect();
+    await new Promise<void>((resolve) => localIoServer.close(() => resolve()));
+    await new Promise<void>((resolve) => localHttpServer.close(() => resolve()));
+  });
 });

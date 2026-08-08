@@ -9,6 +9,9 @@ The app supports real-time multi-file editing across browser tabs, collaborator 
 - Multi-file workspaces with independent shareable URLs
 - Shareable workspace URLs such as `/workspace/abc123`
 - Landing page for creating or joining workspaces
+- Anonymous collaborators with temporary names such as `User4837`
+- Explicit Leave Workspace action for removing only live presence
+- Browser-local recent workspace history
 - Create, rename, delete, and switch files
 - In-app create, rename, and delete confirmation dialogs with validation
 - Duplicate filename feedback
@@ -18,6 +21,7 @@ The app supports real-time multi-file editing across browser tabs, collaborator 
 - New tabs receive the latest workspace state
 - Optional PostgreSQL persistence for workspaces and files
 - Debounced file content saves to avoid writing every keystroke
+- 30-day workspace inactivity lifecycle when PostgreSQL is enabled
 - Active collaborator list
 - Current-file awareness
 - Remote text cursor decorations
@@ -103,6 +107,18 @@ The app is split into three npm workspaces:
 
 The backend keeps active workspace state in memory for fast Socket.io updates. PostgreSQL sits underneath that memory cache and only handles persistence. Collaborator presence and cursor positions are intentionally in memory only and do not persist across restarts.
 
+Durable state:
+
+```text
+PostgreSQL -> workspaces + files
+```
+
+Ephemeral state:
+
+```text
+Memory -> collaborators + cursors + current-file awareness
+```
+
 Backend responsibilities:
 
 - `app.ts`: Express app and `/health`
@@ -160,6 +176,33 @@ Run Code supports:
 
 Code execution is intentionally not sent through Socket.io, not broadcast to collaborators, and not persisted. Each user sees only their own run output.
 
+## Terminal
+
+The Terminal tab provides a browser-local command interface for the current
+workspace. It uses the existing isolated execution provider for supported code
+commands and keeps terminal output local to the current browser tab.
+
+Supported commands:
+
+- `python main.py`
+- `python3 main.py`
+- `node main.js`
+- `npx tsx main.ts`
+- `ls`
+- `pwd`
+- `clear`
+- `help`
+
+Commands execute independently in an isolated execution environment. The
+terminal does not currently maintain a persistent shell session, so commands
+such as `cd src` do not change future command working directories. Package
+installation commands such as `npm install react`, Git commands, and environment
+variable inspection are intentionally unavailable in the current terminal model.
+
+Terminal history is stored only in the current browser session. Terminal input
+and output are not synchronized through Socket.io and are not persisted to
+PostgreSQL.
+
 ## Workspace URLs
 
 The app no longer uses a hardcoded workspace. The landing page creates a unique workspace ID and redirects to:
@@ -173,6 +216,7 @@ Opening the same URL joins the same Socket.io room, memory workspace cache, and 
 Socket.io events include:
 
 - `join-workspace`
+- `leave-workspace`
 - `workspace-state`
 - `create-file`
 - `file-created`
@@ -184,6 +228,50 @@ Socket.io events include:
 - `file-selected`
 - `cursor-change`
 - `collaborators-state`
+
+## Workspace Lifecycle
+
+Workspaces are persistent anonymous collaboration spaces.
+
+Each workspace:
+
+- has a shareable URL
+- stores files in PostgreSQL when `DATABASE_URL` is configured
+- can be reopened later
+- expires after 30 days of inactivity
+
+Workspace activity includes joining, creating a workspace, creating files, renaming files, deleting files, and persisted content updates. Cursor movement and collaborator presence do not update the database timestamp because they are ephemeral and frequent.
+
+The backend runs expired-workspace cleanup once during startup and then once every 24 hours by default. These defaults can be changed with:
+
+```bash
+WORKSPACE_RETENTION_DAYS="30"
+WORKSPACE_CLEANUP_INTERVAL_HOURS="24"
+```
+
+Expired cleanup deletes only workspaces with `updated_at` older than the retention window and excludes workspaces currently loaded in memory.
+
+## Anonymous Collaborators
+
+Collaborators use temporary names such as `User4837`. Names, colors, cursors, and presence exist only for the current live session. They are never saved to PostgreSQL, so refreshing, reconnecting, or restarting the backend may assign a new temporary name.
+
+## Anonymous Workspace History
+
+Recent workspace history is stored only in the user's browser. It is not an account feature and is not synchronized between devices.
+
+The history list:
+
+- keeps up to 10 recent workspaces
+- stores metadata only: workspace ID, display name, last visited time, and optional last file name
+- never stores file contents, source code, cursors, or collaborator names
+- is not saved to PostgreSQL
+- is not synchronized through Socket.io
+
+Removing a workspace from recent history only removes the local browser entry. It does not delete the workspace or affect other collaborators. A workspace itself still expires after 30 days of inactivity, so an expired workspace may remain in local history until the user attempts to reopen it.
+
+## Leave Workspace
+
+`Leave Workspace` opens a confirmation dialog before removing the current browser tab from live presence and navigating back home. It does not delete the workspace, files, recent-history entry, or any other collaborator's state. Closing a browser tab uses the same backend presence cleanup path.
 
 ## Prerequisites
 
@@ -313,11 +401,15 @@ The current tests cover:
 - Socket.io collaboration flows
 - File sidebar behavior
 - File dialog and delete confirmation behavior
+- Leave Workspace confirmation behavior
+- Browser-local recent workspace history behavior
+- Landing page recent workspace rendering and local removal
 - Collaborator list rendering and click handling
 - AI route validation, provider failure handling, empty responses, mocked provider calls, and rate limiting
 - AI panel no-selection, loading, error, copy, explicit replacement, and disabled-action states
 - Code execution validation, safe filename checks, language support, provider failures, output truncation, and rate limiting
 - Run Code panel loading, stdout/stderr rendering, stdin, stop, copy, clear, button run, and keyboard run behavior
+- Anonymous collaborator names, explicit workspace leave, missing-workspace handling, and workspace lifecycle service behavior
 
 ## Multi-Tab Test
 
@@ -332,15 +424,17 @@ The current tests cover:
 9. Refresh a workspace tab and confirm files and editor contents reload.
 10. Move the text caret in one tab and confirm remote cursors appear only for users viewing the same file.
 11. Click another collaborator to jump to their current file and cursor.
-12. Close one tab and confirm that collaborator disappears.
-13. Stop the backend and confirm disconnected status appears.
-14. Restart the backend and confirm the frontend reconnects cleanly.
+12. Click Leave Workspace in one tab and confirm that collaborator disappears while files remain.
+13. Close one tab and confirm that collaborator disappears.
+14. Stop the backend and confirm disconnected status appears.
+15. Restart the backend and confirm the frontend reconnects cleanly.
 
 ## Current Policies
 
 - A workspace must always contain at least one file, so deleting the final file is blocked.
 - While disconnected, Monaco is read-only and edits are paused instead of stored offline.
 - Workspace IDs must be 3-64 characters and use letters, numbers, hyphens, or underscores.
+- Direct unknown workspace URLs are not silently created when PostgreSQL persistence is enabled.
 - On reconnect, the backend session state for the current workspace URL is treated as authoritative.
 - Deleted files are removed by stable `fileId`; stale updates for deleted files are rejected.
 - AI requests are limited to 20 requests per IP every 10 minutes.
@@ -393,11 +487,13 @@ With PostgreSQL enabled:
 
 - the backend runs `migrateDatabase()` before accepting requests
 - the first user joining a workspace loads files from PostgreSQL if they exist
-- missing workspaces are created in memory and then persisted
+- missing workspaces are created only through the landing page's Create Workspace flow
+- unknown or expired workspace URLs show a friendly not-found/expired state
 - every workspace URL has independent files and database records
 - file creation, rename, deletion, and content updates are persisted
 - content updates are debounced, so typing still syncs instantly over Socket.io without writing every keystroke
 - pending content writes are flushed during graceful shutdown
+- workspace cleanup removes PostgreSQL workspaces after 30 days of inactivity
 
 ## Persistence Test
 

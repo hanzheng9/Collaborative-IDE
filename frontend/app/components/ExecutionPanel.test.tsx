@@ -8,20 +8,30 @@ describe("ExecutionPanel", () => {
     vi.restoreAllMocks();
   });
 
+  const baseProps = {
+    files: [{ fileName: "main.js" }],
+    onOpenTerminalInfo: vi.fn(),
+    onRunTerminalCommand: vi.fn().mockResolvedValue("Completed successfully"),
+    onToggleCollapsed: vi.fn()
+  };
+
   it("shows loading state", () => {
     render(
       <ExecutionPanel
         activeTab="output"
         error=""
+        files={baseProps.files}
         isCollapsed={false}
         isRunning
         result={null}
         stdin=""
         setStdin={vi.fn()}
         onClear={vi.fn()}
+        onOpenTerminalInfo={baseProps.onOpenTerminalInfo}
         onTabChange={vi.fn()}
-        onToggleCollapsed={vi.fn()}
+        onToggleCollapsed={baseProps.onToggleCollapsed}
         onRun={vi.fn()}
+        onRunTerminalCommand={baseProps.onRunTerminalCommand}
         onStop={vi.fn()}
       />
     );
@@ -34,6 +44,7 @@ describe("ExecutionPanel", () => {
       <ExecutionPanel
         activeTab="output"
         error=""
+        files={baseProps.files}
         isCollapsed={false}
         isRunning={false}
         result={{
@@ -46,9 +57,11 @@ describe("ExecutionPanel", () => {
         stdin=""
         setStdin={vi.fn()}
         onClear={vi.fn()}
+        onOpenTerminalInfo={baseProps.onOpenTerminalInfo}
         onTabChange={vi.fn()}
-        onToggleCollapsed={vi.fn()}
+        onToggleCollapsed={baseProps.onToggleCollapsed}
         onRun={vi.fn()}
+        onRunTerminalCommand={baseProps.onRunTerminalCommand}
         onStop={vi.fn()}
       />
     );
@@ -72,6 +85,7 @@ describe("ExecutionPanel", () => {
       <ExecutionPanel
         activeTab="input"
         error=""
+        files={baseProps.files}
         isCollapsed={false}
         isRunning
         result={{
@@ -82,9 +96,11 @@ describe("ExecutionPanel", () => {
         stdin=""
         setStdin={setStdin}
         onClear={onClear}
+        onOpenTerminalInfo={baseProps.onOpenTerminalInfo}
         onTabChange={onTabChange}
-        onToggleCollapsed={vi.fn()}
+        onToggleCollapsed={baseProps.onToggleCollapsed}
         onRun={vi.fn()}
+        onRunTerminalCommand={baseProps.onRunTerminalCommand}
         onStop={onStop}
       />
     );
@@ -102,5 +118,36 @@ describe("ExecutionPanel", () => {
     expect(onClear).toHaveBeenCalled();
     expect(onStop).toHaveBeenCalled();
     expect(onTabChange).toHaveBeenCalledWith("output");
+  });
+
+  it("shows terminal information button", async () => {
+    const onOpenTerminalInfo = vi.fn();
+
+    render(
+      <ExecutionPanel
+        activeTab="terminal"
+        error=""
+        files={baseProps.files}
+        isCollapsed={false}
+        isRunning={false}
+        result={null}
+        stdin=""
+        setStdin={vi.fn()}
+        onClear={vi.fn()}
+        onOpenTerminalInfo={onOpenTerminalInfo}
+        onRun={vi.fn()}
+        onRunTerminalCommand={baseProps.onRunTerminalCommand}
+        onStop={vi.fn()}
+        onTabChange={vi.fn()}
+        onToggleCollapsed={baseProps.onToggleCollapsed}
+      />
+    );
+
+    const infoButton = screen.getByRole("button", {
+      name: /terminal capabilities/i
+    });
+    expect(infoButton).toBeInTheDocument();
+    await userEvent.click(infoButton);
+    expect(onOpenTerminalInfo).toHaveBeenCalledOnce();
   });
 });

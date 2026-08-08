@@ -14,6 +14,11 @@ export type PersistedWorkspace = {
   files: PersistedFile[];
 };
 
+export type DeleteExpiredWorkspacesOptions = {
+  excludeWorkspaceIds?: string[];
+  retentionDays?: number;
+};
+
 const { Pool } = pg;
 const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
@@ -104,6 +109,36 @@ export async function loadWorkspace(workspaceId: string) {
   } satisfies PersistedWorkspace;
 }
 
+export async function touchWorkspace(workspaceId: string) {
+  await updateWorkspaceTimestamp(workspaceId);
+}
+
+export async function deleteExpiredWorkspaces(
+  options: DeleteExpiredWorkspacesOptions = {}
+) {
+  if (!pool) {
+    return 0;
+  }
+
+  const retentionDays = options.retentionDays ?? 30;
+  const excludeWorkspaceIds = options.excludeWorkspaceIds ?? [];
+  const result = await pool.query(
+    `
+      DELETE FROM workspaces
+      WHERE updated_at < NOW() - make_interval(days => $1)
+        AND NOT (id = ANY($2::text[]))
+    `,
+    [retentionDays, excludeWorkspaceIds]
+  );
+
+  logger.info("expired workspace cleanup completed", {
+    removedWorkspaces: result.rowCount ?? 0,
+    retentionDays
+  });
+
+  return result.rowCount ?? 0;
+}
+
 export async function createWorkspace(
   workspaceId: string,
   name: string,
@@ -167,7 +202,7 @@ export async function saveFile(
     [file.fileId, workspaceId, file.fileName, file.language, file.content]
   );
 
-  await touchWorkspace(workspaceId);
+  await updateWorkspaceTimestamp(workspaceId);
 }
 
 export async function renameFile(
@@ -189,7 +224,7 @@ export async function renameFile(
     [workspaceId, fileId, fileName, language]
   );
 
-  await touchWorkspace(workspaceId);
+  await updateWorkspaceTimestamp(workspaceId);
 }
 
 export async function saveFileContent(
@@ -210,7 +245,7 @@ export async function saveFileContent(
     [workspaceId, fileId, content]
   );
 
-  await touchWorkspace(workspaceId);
+  await updateWorkspaceTimestamp(workspaceId);
 }
 
 export async function deleteFile(workspaceId: string, fileId: string) {
@@ -229,7 +264,7 @@ export async function deleteFile(workspaceId: string, fileId: string) {
       `,
       [workspaceId, fileId]
     );
-    await touchWorkspace(workspaceId, client);
+    await updateWorkspaceTimestamp(workspaceId, client);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -239,7 +274,7 @@ export async function deleteFile(workspaceId: string, fileId: string) {
   }
 }
 
-async function touchWorkspace(
+async function updateWorkspaceTimestamp(
   workspaceId: string,
   client: PgPool | PoolClient | null = pool
 ) {

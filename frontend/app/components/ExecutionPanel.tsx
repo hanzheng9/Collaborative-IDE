@@ -3,13 +3,17 @@ import type { ExecutionResult } from "../codeExecution";
 import { ExecutionOutput } from "./ExecutionOutput";
 import { ExecutionToolbar, type BottomPanelTab } from "./ExecutionToolbar";
 import { StdinInput } from "./StdinInput";
+import { TerminalView } from "./TerminalView";
 
 type ExecutionPanelProps = {
   activeTab: BottomPanelTab;
   error: string;
   isCollapsed: boolean;
   isRunning: boolean;
+  files: { fileName: string }[];
   onClear: () => void;
+  onOpenTerminalInfo: () => void;
+  onRunTerminalCommand: (command: string) => Promise<string>;
   onTabChange: (tab: BottomPanelTab) => void;
   onToggleCollapsed: () => void;
   onRun: () => void;
@@ -24,8 +28,11 @@ export function ExecutionPanel({
   error,
   isCollapsed,
   isRunning,
+  files,
   onClear,
+  onOpenTerminalInfo,
   onRun,
+  onRunTerminalCommand,
   onStop,
   onTabChange,
   onToggleCollapsed,
@@ -58,6 +65,7 @@ export function ExecutionPanel({
         isCollapsed={isCollapsed}
         onClear={onClear}
         onCopy={copyOutput}
+        onOpenTerminalInfo={onOpenTerminalInfo}
         onRun={onRun}
         onStop={onStop}
         onTabChange={onTabChange}
@@ -68,7 +76,10 @@ export function ExecutionPanel({
           {activeTab === "input" ? (
             <StdinInput value={stdin} onChange={setStdin} />
           ) : activeTab === "terminal" ? (
-            <ExecutionOutput error={error} isRunning={isRunning} result={result} />
+            <TerminalView
+              files={files}
+              onRunCommand={onRunTerminalCommand}
+            />
           ) : (
             <ExecutionOutput error={error} isRunning={isRunning} result={result} />
           )}
