@@ -3,6 +3,7 @@ import {
   isExecutableLanguage,
   runCode
 } from "./codeExecution";
+import { getBackendUrl } from "./backendUrl";
 import type { WorkspaceFile } from "./types";
 
 const selectedFile: WorkspaceFile = {
@@ -54,7 +55,7 @@ describe("code execution client", () => {
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:4000/api/execution/run",
+      getBackendUrl("/api/execution/run"),
       expect.objectContaining({
         credentials: "omit",
         method: "POST"

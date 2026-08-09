@@ -1,3 +1,4 @@
+import { getBackendUrl } from "./backendUrl";
 import type { AiCodeSelection } from "./hooks/useCollaborativeWorkspace";
 
 export const aiActions = ["explain", "refactor", "fix", "tests", "optimize"] as const;
@@ -32,7 +33,7 @@ export async function requestAiAssist(
   selection: AiCodeSelection,
   signal: AbortSignal
 ) {
-  const response = await fetch("http://localhost:4000/api/ai/assist", {
+  const response = await fetch(getBackendUrl("/api/ai/assist"), {
     body: JSON.stringify({
       action,
       code: selection.code,

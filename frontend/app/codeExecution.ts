@@ -1,3 +1,4 @@
+import { getBackendUrl } from "./backendUrl";
 import type { WorkspaceFile } from "./types";
 
 export type ExecutionStatus =
@@ -31,7 +32,7 @@ export async function runCode(
   stdin: string,
   signal: AbortSignal
 ) {
-  const response = await fetch("http://localhost:4000/api/execution/run", {
+  const response = await fetch(getBackendUrl("/api/execution/run"), {
     body: JSON.stringify({
       activeFileId: selectedFile.fileId,
       files: files.map((file) => ({

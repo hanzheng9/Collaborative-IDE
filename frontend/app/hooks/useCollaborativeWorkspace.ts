@@ -3,6 +3,7 @@
 import { loader, type OnChange, type OnMount } from "@monaco-editor/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
+import { BACKEND_URL } from "../backendUrl";
 import type {
   AppErrorPayload,
   ClientToServerEvents,
@@ -25,7 +26,6 @@ import {
   removeRecentWorkspace
 } from "../utils/recentWorkspaces";
 
-const backendUrl = "http://localhost:4000";
 const cursorEmitThrottleMs = 80;
 
 type EditorInstance = Parameters<OnMount>[0];
@@ -176,7 +176,7 @@ export function useCollaborativeWorkspace(workspaceId: string) {
   }, [files]);
 
   useEffect(() => {
-    const socket: CollaborativeSocket = io(backendUrl, {
+    const socket: CollaborativeSocket = io(BACKEND_URL, {
       reconnection: true
     });
     socketRef.current = socket;
