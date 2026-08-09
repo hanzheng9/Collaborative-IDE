@@ -66,6 +66,12 @@ export async function migrateDatabase() {
 
     CREATE INDEX IF NOT EXISTS files_workspace_id_idx ON files(workspace_id);
 
+    CREATE TABLE IF NOT EXISTS execution_usage (
+      month_key TEXT PRIMARY KEY,
+      execution_count INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     DO $$
     DECLARE
       current_primary_key_name TEXT;
@@ -302,6 +308,37 @@ export async function deleteFile(workspaceId: string, fileId: string) {
   } finally {
     client.release();
   }
+}
+
+export async function incrementExecutionUsage(
+  monthKey: string,
+  monthlyLimit: number
+) {
+  if (!pool) {
+    return { allowed: true, executionCount: 0 };
+  }
+
+  const result = await pool.query<{ execution_count: number }>(
+    `
+      INSERT INTO execution_usage (month_key, execution_count, updated_at)
+      VALUES ($1, 1, NOW())
+      ON CONFLICT (month_key) DO UPDATE SET
+        execution_count = execution_usage.execution_count + 1,
+        updated_at = NOW()
+      WHERE execution_usage.execution_count < $2
+      RETURNING execution_count
+    `,
+    [monthKey, monthlyLimit]
+  );
+
+  if (result.rowCount === 0) {
+    return { allowed: false, executionCount: monthlyLimit };
+  }
+
+  return {
+    allowed: true,
+    executionCount: result.rows[0].execution_count
+  };
 }
 
 async function updateWorkspaceTimestamp(

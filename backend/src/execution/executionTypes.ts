@@ -14,6 +14,7 @@ export type ExecutionSourceFile = {
 
 export type ExecutionProviderRequest = {
   files: ExecutionSourceFile[];
+  judge0LanguageId?: number;
   language: SupportedExecutionLanguage;
   stdin?: string;
   timeoutMs: number;

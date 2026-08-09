@@ -274,4 +274,22 @@ describe("code execution route", () => {
       .send(runBody())
       .expect(429);
   });
+
+  it("returns a user-facing 429 when the monthly execution cap is reached", async () => {
+    const provider = new MockExecutionProvider({
+      status: "provider_error",
+      stderr:
+        "Monthly execution limit reached.\n\nTo keep the public demo available, code execution has been temporarily disabled.\n\nThe limit resets automatically at the beginning of next month.",
+      stdout: ""
+    });
+
+    await request(createExecutionApp(provider))
+      .post("/api/execution/run")
+      .send(runBody())
+      .expect(429)
+      .expect(({ body }) => {
+        expect(body.error).toMatch(/monthly execution limit reached/i);
+        expect(body.error).toMatch(/resets automatically/i);
+      });
+  });
 });

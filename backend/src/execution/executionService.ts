@@ -11,7 +11,9 @@ import {
 } from "./executionTypes.js";
 import { executionLimits, truncateOutput } from "./executionValidation.js";
 import { getRuntime } from "./languageRegistry.js";
+import { Judge0ExecutionProvider } from "./judge0ExecutionProvider.js";
 import { PistonExecutionProvider } from "./pistonExecutionProvider.js";
+import { incrementExecutionUsage } from "../database.js";
 
 type ExecutionServiceOptions = {
   provider?: ExecutionProvider;
@@ -20,6 +22,37 @@ type ExecutionServiceOptions = {
 
 function createDefaultProvider() {
   const provider = process.env.CODE_EXECUTION_PROVIDER ?? "piston";
+  const configuredMonthlyLimit = Number(process.env.JUDGE0_MONTHLY_EXECUTION_LIMIT);
+  const monthlyLimit =
+    Number.isFinite(configuredMonthlyLimit) && configuredMonthlyLimit > 0
+      ? configuredMonthlyLimit
+      : 1500;
+
+  if (provider === "judge0") {
+    const apiKey = process.env.JUDGE0_API_KEY;
+    const apiUrl = process.env.JUDGE0_API_URL;
+
+    if (!apiKey || !apiUrl) {
+      logger.warn("code execution disabled", {
+        missingVariables: [
+          !apiKey ? "JUDGE0_API_KEY" : "",
+          !apiUrl ? "JUDGE0_API_URL" : ""
+        ].filter(Boolean).join(","),
+        provider
+      });
+      return null;
+    }
+
+    return new Judge0ExecutionProvider({
+      apiHost: process.env.JUDGE0_API_HOST,
+      apiKey,
+      apiUrl,
+      monthlyLimit,
+      requestTimeoutMs: executionLimits.timeoutMs + 5000,
+      reserveMonthlyExecution: () =>
+        incrementExecutionUsage(new Date().toISOString().slice(0, 7), monthlyLimit)
+    });
+  }
 
   if (provider !== "piston") {
     logger.warn("code execution disabled", {
@@ -93,6 +126,7 @@ export class ExecutionService {
     const runtime = getRuntime(request.language);
     const providerRequest = {
       files: providerFiles,
+      judge0LanguageId: runtime.judge0LanguageId,
       language: runtime.providerLanguage,
       stdin: request.stdin,
       timeoutMs: executionLimits.timeoutMs,

@@ -9,6 +9,8 @@ type CreateAppOptions = {
   aiRateLimitMax?: number;
   aiRateLimitWindowMs?: number;
   aiService?: AiService;
+  executionDailyRateLimitMax?: number;
+  executionDailyRateLimitWindowMs?: number;
   executionRateLimitMax?: number;
   executionRateLimitWindowMs?: number;
   executionService?: ExecutionService;
@@ -32,6 +34,8 @@ export function createApp(options: CreateAppOptions = {}) {
     app.use(
       "/api/execution",
       createExecutionRouter({
+        dailyRateLimitMax: options.executionDailyRateLimitMax,
+        dailyRateLimitWindowMs: options.executionDailyRateLimitWindowMs,
         rateLimitMax: options.executionRateLimitMax,
         rateLimitWindowMs: options.executionRateLimitWindowMs,
         service: options.executionService

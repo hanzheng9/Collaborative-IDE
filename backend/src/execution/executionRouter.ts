@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { Request } from "express";
+import type { Response } from "express";
 import rateLimit from "express-rate-limit";
 import { logger } from "../logger.js";
 import { ExecutionService } from "./executionService.js";
@@ -7,15 +7,11 @@ import { ExecutionServiceError } from "./executionTypes.js";
 import { validateExecutionRequest } from "./executionValidation.js";
 
 type ExecutionRouterOptions = {
+  dailyRateLimitMax?: number;
+  dailyRateLimitWindowMs?: number;
   rateLimitMax?: number;
   rateLimitWindowMs?: number;
   service: ExecutionService;
-};
-
-type RateLimitedRequest = Request & {
-  rateLimit?: {
-    resetTime?: Date;
-  };
 };
 
 function getPositiveNumber(value: string | undefined, fallback: number) {
@@ -23,45 +19,46 @@ function getPositiveNumber(value: string | undefined, fallback: number) {
   return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : fallback;
 }
 
-function getRetryMessage(request: RateLimitedRequest) {
-  const resetTime = request.rateLimit?.resetTime?.getTime();
-
-  if (!resetTime) {
-    return "Too many code executions. Try again shortly.";
-  }
-
-  const retrySeconds = Math.max(1, Math.ceil((resetTime - Date.now()) / 1000));
-
-  if (retrySeconds < 60) {
-    return `Too many code executions. Try again in about ${retrySeconds} seconds.`;
-  }
-
-  return `Too many code executions. Try again in about ${Math.ceil(
-    retrySeconds / 60
-  )} minutes.`;
-}
+const executionLimitMessage =
+  "Execution limit reached.\n\nTo keep the public demo reliable, code execution is temporarily unavailable.\n\nPlease try again later.";
 
 export function createExecutionRouter(options: ExecutionRouterOptions) {
   const router = Router();
   const rateLimitMax =
     options.rateLimitMax ??
-    getPositiveNumber(process.env.EXECUTION_RATE_LIMIT_MAX, 10);
+    getPositiveNumber(process.env.EXECUTION_RATE_LIMIT_MAX, 20);
   const rateLimitWindowMs =
     options.rateLimitWindowMs ??
-    getPositiveNumber(process.env.EXECUTION_RATE_LIMIT_WINDOW_MS, 5 * 60 * 1000);
-  const limiter = rateLimit({
-    handler(request, response) {
+    getPositiveNumber(process.env.EXECUTION_RATE_LIMIT_WINDOW_MS, 60 * 60 * 1000);
+  const dailyRateLimitMax =
+    options.dailyRateLimitMax ??
+    getPositiveNumber(process.env.EXECUTION_DAILY_RATE_LIMIT_MAX, 100);
+  const dailyRateLimitWindowMs =
+    options.dailyRateLimitWindowMs ??
+    getPositiveNumber(process.env.EXECUTION_DAILY_RATE_LIMIT_WINDOW_MS, 24 * 60 * 60 * 1000);
+  const createLimitHandler = () => {
+    return (_request: unknown, response: Response) => {
       response.status(429).json({
-        error: getRetryMessage(request as RateLimitedRequest)
+        error: executionLimitMessage
       });
-    },
+    };
+  };
+  const hourlyLimiter = rateLimit({
+    handler: createLimitHandler(),
     legacyHeaders: false,
     max: rateLimitMax,
     standardHeaders: true,
     windowMs: rateLimitWindowMs
   });
+  const dailyLimiter = rateLimit({
+    handler: createLimitHandler(),
+    legacyHeaders: false,
+    max: dailyRateLimitMax,
+    standardHeaders: true,
+    windowMs: dailyRateLimitWindowMs
+  });
 
-  router.post("/run", limiter, async (request, response) => {
+  router.post("/run", hourlyLimiter, dailyLimiter, async (request, response) => {
     const validation = validateExecutionRequest(request.body);
 
     if (!validation.ok) {
@@ -81,6 +78,13 @@ export function createExecutionRouter(options: ExecutionRouterOptions) {
       );
 
       if (result.status === "provider_error") {
+        if (/monthly execution limit reached/i.test(result.stderr)) {
+          response.status(429).json({
+            error: result.stderr
+          });
+          return;
+        }
+
         response.status(503).json({
           error: "Execution service is unavailable."
         });

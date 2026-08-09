@@ -129,7 +129,7 @@ Backend responsibilities:
 - `database.ts`: PostgreSQL migration, workspace/file loading, saving, renaming, content updates, deletion, and connection cleanup
 - `socketValidation.ts`: runtime validation for incoming socket payloads
 - `ai/`: Azure OpenAI client setup, prompt construction, validation, service orchestration, and `/api/ai/assist`
-- `execution/`: code execution validation, provider abstraction, Piston integration, execution orchestration, and `/api/execution/run`
+- `execution/`: code execution validation, provider abstraction, Piston/Judge0 integrations, execution orchestration, and `/api/execution/run`
 
 Frontend responsibilities:
 
@@ -337,7 +337,7 @@ AI_RATE_LIMIT_MAX="5"
 AI_RATE_LIMIT_WINDOW_MS="600000"
 AI_MAX_CODE_CHARS="2000"
 AI_MAX_CONTEXT_CHARS="1500"
-AI_MAX_OUTPUT_TOKENS="400"
+AI_MAX_OUTPUT_TOKENS="900"
 ```
 
 For local testing, you can temporarily increase `AI_RATE_LIMIT_MAX` or lower `AI_RATE_LIMIT_WINDOW_MS`. Restart the backend after changing these values.
@@ -351,11 +351,13 @@ PISTON_API_KEY=""
 PISTON_JAVASCRIPT_VERSION="18.15.0"
 PISTON_TYPESCRIPT_VERSION="5.0.3"
 PISTON_PYTHON_VERSION="3.10.0"
-EXECUTION_RATE_LIMIT_MAX="10"
-EXECUTION_RATE_LIMIT_WINDOW_MS="300000"
+EXECUTION_RATE_LIMIT_MAX="20"
+EXECUTION_RATE_LIMIT_WINDOW_MS="3600000"
+EXECUTION_DAILY_RATE_LIMIT_MAX="100"
+EXECUTION_DAILY_RATE_LIMIT_WINDOW_MS="86400000"
 ```
 
-The backend uses an execution provider abstraction so another sandbox provider can be added later. The current implementation uses Piston-compatible APIs. For the public Piston service, use `https://emkc.org/api/v2/piston` as the base URL. If you self-host Piston, set `PISTON_API_URL` to that instance's API base, or to the full `/execute` URL.
+The backend uses an execution provider abstraction. Local development can use Piston, while production can use Judge0 through RapidAPI. Provider secrets are read only by the backend and are never sent to the frontend.
 
 For local Piston development:
 
@@ -372,6 +374,18 @@ Then set:
 PISTON_API_URL="http://localhost:2000/api/v2"
 PISTON_API_KEY=""
 ```
+
+For production Judge0 on Railway:
+
+```bash
+CODE_EXECUTION_PROVIDER="judge0"
+JUDGE0_API_URL="https://judge0-ce.p.rapidapi.com"
+JUDGE0_API_KEY="your-rapidapi-key"
+JUDGE0_API_HOST="judge0-ce.p.rapidapi.com"
+JUDGE0_MONTHLY_EXECUTION_LIMIT="1500"
+```
+
+Judge0 usage is capped before provider submission. The monthly counter is stored in PostgreSQL using a `YYYY-MM` key, so it survives backend restarts and naturally resets when a new month begins. The counter is reserved immediately before the Judge0 submission request; if the provider rejects after that point, the app keeps the count conservative and does not retry automatically.
 
 ## Automated Tests
 
@@ -443,9 +457,12 @@ The current tests cover:
 - AI requests are limited to 5 requests per IP every 10 minutes by default.
 - AI selected code is limited to 2,000 characters by default.
 - AI surrounding context is trimmed to 1,500 characters by default.
-- AI responses are capped at 400 output tokens by default.
+- AI responses are capped at 900 output tokens by default.
 - AI output is rendered as untrusted Markdown with raw HTML disabled.
 - AI-generated code is never executed or inserted automatically.
+- Code execution is limited to 20 runs per IP per hour and 100 runs per IP per day by default.
+- Judge0 production execution is capped at 1,500 global submissions per calendar month.
+- Judge0 monthly usage is stored in PostgreSQL and resets naturally by month key.
 
 ## AI Manual Test
 
