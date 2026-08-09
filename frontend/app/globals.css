@@ -89,6 +89,50 @@ textarea:focus-visible,
   letter-spacing: 0;
 }
 
+.workspaceTitleRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.workspaceNameButton {
+  max-width: min(420px, 42vw);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: text;
+  font: inherit;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceNameButton:hover,
+.workspaceNameButton:focus-visible {
+  color: var(--ide-primary);
+}
+
+.workspaceNameEditButton {
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.workspaceNameInput {
+  width: min(420px, 42vw);
+  border: 1px solid var(--ide-border-strong);
+  border-radius: var(--ide-radius);
+  background: var(--ide-surface);
+  color: var(--ide-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 3px 6px;
+}
+
 .topbar p {
   display: flex;
   min-width: 0;

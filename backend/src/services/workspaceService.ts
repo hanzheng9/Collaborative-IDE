@@ -3,6 +3,7 @@ import type {
   CreateFilePayload,
   DeleteFilePayload,
   RenameFilePayload,
+  RenameWorkspacePayload,
   WorkspaceFile
 } from "../types.js";
 import { logger } from "../logger.js";
@@ -10,7 +11,16 @@ import { WorkspaceStateStore } from "../workspaceState.js";
 import { DebouncedPersistence } from "./debouncedPersistence.js";
 
 export type WorkspacePersistence = {
-  loadWorkspace?: (workspaceId: string) => Promise<WorkspaceFile[] | null | undefined>;
+  loadWorkspace?: (
+    workspaceId: string
+  ) => Promise<
+    | {
+        files: WorkspaceFile[];
+        name: string;
+      }
+    | null
+    | undefined
+  >;
   createWorkspace?: (
     workspaceId: string,
     files: WorkspaceFile[]
@@ -22,6 +32,7 @@ export type WorkspacePersistence = {
     fileName: string,
     language: string
   ) => Promise<void>;
+  renameWorkspace?: (workspaceId: string, name: string) => Promise<void>;
   saveFileContent?: (
     workspaceId: string,
     fileId: string,
@@ -70,10 +81,16 @@ export class WorkspaceService {
 
     const loadPromise = (async () => {
       try {
-        let files: WorkspaceFile[] | null | undefined;
+        let persistedWorkspace:
+          | {
+              files: WorkspaceFile[];
+              name: string;
+            }
+          | null
+          | undefined;
 
         try {
-          files = await this.persistence.loadWorkspace?.(workspaceId);
+          persistedWorkspace = await this.persistence.loadWorkspace?.(workspaceId);
         } catch (error) {
           logger.error("database unavailable", {
             operation: "load-workspace",
@@ -81,17 +98,18 @@ export class WorkspaceService {
           });
         }
 
-        if (files && files.length > 0) {
-          this.workspaces.setWorkspaceFiles(workspaceId, files);
+        if (persistedWorkspace && persistedWorkspace.files.length > 0) {
+          this.workspaces.setWorkspaceFiles(workspaceId, persistedWorkspace.files);
+          this.workspaces.setWorkspaceName(workspaceId, persistedWorkspace.name);
           void this.touchWorkspaceActivity(workspaceId, "join-workspace");
           logger.info("workspace loaded from PostgreSQL", {
-            fileCount: files.length,
+            fileCount: persistedWorkspace.files.length,
             workspaceId
           });
           return { ok: true as const };
         }
 
-        if (files === null && !options.createIfMissing) {
+        if (persistedWorkspace === null && !options.createIfMissing) {
           logger.info("workspace not found", { workspaceId });
           return {
             ok: false as const,
@@ -178,6 +196,30 @@ export class WorkspaceService {
         .catch(() => {
           logger.error("failed to persist renamed file", {
             fileId: payload.fileId,
+            workspaceId: payload.workspaceId
+          });
+        });
+    }
+
+    return result;
+  }
+
+  renameWorkspace(payload: RenameWorkspacePayload) {
+    const result = this.workspaces.renameWorkspace(
+      payload.workspaceId,
+      payload.name
+    );
+
+    if (result.ok && this.persistence.renameWorkspace) {
+      void this.persistence
+        .renameWorkspace(payload.workspaceId, result.name)
+        .then(() => {
+          logger.info("workspace rename persisted", {
+            workspaceId: payload.workspaceId
+          });
+        })
+        .catch(() => {
+          logger.error("failed to persist workspace rename", {
             workspaceId: payload.workspaceId
           });
         });

@@ -50,6 +50,7 @@ function mockWorkspace(
   options: { syncStatus?: "synced" | "syncing" | "unsaved" | "connection-lost" } = {}
 ) {
   const leaveWorkspace = vi.fn();
+  const renameWorkspace = vi.fn();
   vi.mocked(useCollaborativeWorkspace).mockReturnValue({
     collaborators: [],
     connectionStatus: "connected",
@@ -68,16 +69,18 @@ function mockWorkspace(
     localUserId: "local",
     relayoutEditor: vi.fn(),
     renameFile: vi.fn(),
+    renameWorkspace,
     replaceAiSelection: vi.fn(),
     selectedFile,
     selectedFileId: selectedFile?.fileId ?? null,
     selectFile: vi.fn(),
     showFeedback: vi.fn(),
     syncStatus: options.syncStatus ?? "synced",
-    workspaceError: null
+    workspaceError: null,
+    workspaceName: "Untitled Workspace"
   });
 
-  return { leaveWorkspace };
+  return { leaveWorkspace, renameWorkspace };
 }
 
 describe("WorkspacePage execution", () => {
@@ -350,6 +353,25 @@ describe("WorkspacePage execution", () => {
     ).toBeInTheDocument();
   });
 
+  it("renames the workspace from the header", async () => {
+    const { renameWorkspace } = mockWorkspace();
+
+    render(<WorkspacePage workspaceId="workspace-1" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /untitled workspace/i })
+    );
+    await userEvent.clear(screen.getByRole("textbox", { name: /workspace name/i }));
+    await userEvent.type(
+      screen.getByRole("textbox", { name: /workspace name/i }),
+      "Portfolio Project{Enter}"
+    );
+
+    expect(renameWorkspace).toHaveBeenCalledWith(
+      "Portfolio Project",
+      expect.any(Function)
+    );
+  });
+
   it("shows an expired workspace state", async () => {
     vi.mocked(useCollaborativeWorkspace).mockReturnValue({
       collaborators: [],
@@ -369,6 +391,7 @@ describe("WorkspacePage execution", () => {
       localUserId: null,
       relayoutEditor: vi.fn(),
       renameFile: vi.fn(),
+      renameWorkspace: vi.fn(),
       replaceAiSelection: vi.fn(),
       selectedFile: null,
       selectedFileId: null,
@@ -378,7 +401,8 @@ describe("WorkspacePage execution", () => {
       workspaceError: {
         code: "WORKSPACE_NOT_FOUND",
         message: "Workspace not found or expired."
-      }
+      },
+      workspaceName: "Untitled Workspace"
     });
 
     render(<WorkspacePage workspaceId="workspace-1" />);

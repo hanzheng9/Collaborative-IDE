@@ -15,6 +15,25 @@ describe("WorkspaceStateStore", () => {
     expect(store.getWorkspaceState("demo")).toEqual(state);
   });
 
+  it("renames workspaces with trimming, default fallback, and max length validation", () => {
+    const store = new WorkspaceStateStore();
+
+    expect(store.getWorkspaceState("demo").name).toBe("Untitled Workspace");
+    expect(store.renameWorkspace("demo", "  Client Project  ")).toEqual({
+      ok: true,
+      name: "Client Project"
+    });
+    expect(store.getWorkspaceState("demo").name).toBe("Client Project");
+    expect(store.renameWorkspace("demo", "   ")).toEqual({
+      ok: true,
+      name: "Untitled Workspace"
+    });
+    expect(store.renameWorkspace("demo", "x".repeat(101))).toMatchObject({
+      ok: false,
+      code: "INVALID_WORKSPACE_NAME"
+    });
+  });
+
   it("creates files with trimmed names, stable unique ids, and language", () => {
     let id = 0;
     const store = new WorkspaceStateStore({

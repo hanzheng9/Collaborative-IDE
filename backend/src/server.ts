@@ -11,6 +11,7 @@ import {
   loadWorkspace,
   migrateDatabase,
   renameFile,
+  renameWorkspace,
   saveFile,
   saveFileContent,
   touchWorkspace
@@ -31,13 +32,19 @@ export async function startServer() {
         return undefined;
       }
 
-      return workspace?.files ?? null;
+      return workspace
+        ? {
+            files: workspace.files,
+            name: workspace.name
+          }
+        : null;
     },
     async createWorkspace(workspaceId, files) {
       await createWorkspace(workspaceId, "Untitled Workspace", files);
     },
     deleteFile,
     renameFile,
+    renameWorkspace,
     saveFile,
     saveFileContent,
     touchWorkspace

@@ -6,19 +6,23 @@ describe("WorkspaceService lifecycle", () => {
     const touchWorkspace = vi.fn().mockResolvedValue(undefined);
     const service = new WorkspaceService({
       persistence: {
-        loadWorkspace: async () => [
-          {
-            fileId: "main.ts",
-            fileName: "main.ts",
-            language: "typescript",
-            content: ""
-          }
-        ],
+        loadWorkspace: async () => ({
+          files: [
+            {
+              fileId: "main.ts",
+              fileName: "main.ts",
+              language: "typescript",
+              content: ""
+            }
+          ],
+          name: "Learning Workspace"
+        }),
         touchWorkspace
       }
     });
 
     await expect(service.loadWorkspace("demo")).resolves.toEqual({ ok: true });
+    expect(service.getWorkspaceState("demo").name).toBe("Learning Workspace");
     expect(touchWorkspace).toHaveBeenCalledWith("demo");
   });
 
@@ -118,6 +122,49 @@ describe("WorkspaceService lifecycle", () => {
       created.file.fileId
     );
     vi.useRealTimers();
+  });
+
+  it("renames a workspace in memory and persists the normalized name", async () => {
+    const renameWorkspace = vi.fn().mockResolvedValue(undefined);
+    const service = new WorkspaceService({
+      persistence: { renameWorkspace }
+    });
+    await service.loadWorkspace("demo", { createIfMissing: true });
+
+    const result = service.renameWorkspace({
+      workspaceId: "demo",
+      name: "  Portfolio IDE  "
+    });
+
+    expect(result).toEqual({ ok: true, name: "Portfolio IDE" });
+    expect(service.getWorkspaceState("demo").name).toBe("Portfolio IDE");
+    expect(renameWorkspace).toHaveBeenCalledWith("demo", "Portfolio IDE");
+  });
+
+  it("validates workspace rename input", async () => {
+    const renameWorkspace = vi.fn().mockResolvedValue(undefined);
+    const service = new WorkspaceService({
+      persistence: { renameWorkspace }
+    });
+    await service.loadWorkspace("demo", { createIfMissing: true });
+
+    expect(
+      service.renameWorkspace({
+        workspaceId: "demo",
+        name: "   "
+      })
+    ).toEqual({ ok: true, name: "Untitled Workspace" });
+    expect(service.getWorkspaceState("demo").name).toBe("Untitled Workspace");
+
+    const tooLong = service.renameWorkspace({
+      workspaceId: "demo",
+      name: "x".repeat(101)
+    });
+
+    expect(tooLong).toMatchObject({
+      ok: false,
+      code: "INVALID_WORKSPACE_NAME"
+    });
   });
 
   it("does not persist cursor-only activity", async () => {

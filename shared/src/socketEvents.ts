@@ -9,6 +9,11 @@ export type JoinWorkspacePayload = {
   createIfMissing?: boolean;
 };
 
+export type RenameWorkspacePayload = {
+  workspaceId: string;
+  name: string;
+};
+
 export type CreateFilePayload = {
   workspaceId: string;
   fileName: string;
@@ -58,6 +63,7 @@ export type Collaborator = {
 
 export type WorkspaceState = {
   workspaceId: string;
+  name: string;
   files: WorkspaceFile[];
 };
 
@@ -86,8 +92,14 @@ export type CollaboratorsStatePayload = {
   collaborators: Collaborator[];
 };
 
+export type WorkspaceRenamedPayload = {
+  workspaceId: string;
+  name: string;
+};
+
 export type AppErrorCode =
   | "WORKSPACE_NOT_FOUND"
+  | "INVALID_WORKSPACE_NAME"
   | "FILE_NOT_FOUND"
   | "DUPLICATE_FILENAME"
   | "INVALID_FILENAME"
@@ -112,6 +124,10 @@ export type OperationAck =
 export type ClientToServerEvents = {
   "join-workspace": (payload: JoinWorkspacePayload) => void;
   "leave-workspace": () => void;
+  "rename-workspace": (
+    payload: RenameWorkspacePayload,
+    ack?: (payload: OperationAck) => void
+  ) => void;
   "create-file": (
     payload: CreateFilePayload,
     ack?: (payload: OperationAck) => void
@@ -131,6 +147,7 @@ export type ClientToServerEvents = {
 
 export type ServerToClientEvents = {
   "workspace-state": (payload: WorkspaceStatePayload) => void;
+  "workspace-renamed": (payload: WorkspaceRenamedPayload) => void;
   "file-created": (payload: FileCreatedPayload) => void;
   "file-renamed": (payload: FileRenamedPayload) => void;
   "file-deleted": (payload: FileDeletedPayload) => void;

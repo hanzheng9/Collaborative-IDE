@@ -81,6 +81,7 @@ export function useCollaborativeWorkspace(workspaceId: string) {
   const [isMonacoReady, setIsMonacoReady] = useState(false);
   const [isWorkspaceLoaded, setIsWorkspaceLoaded] = useState(false);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
+  const [workspaceName, setWorkspaceName] = useState("Untitled Workspace");
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [localUserId, setLocalUserId] = useState<string | null>(null);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
@@ -218,9 +219,10 @@ export function useCollaborativeWorkspace(workspaceId: string) {
       }
 
       setFiles(payload.files);
+      setWorkspaceName(payload.name);
       addRecentWorkspace({
         workspaceId,
-        name: "Untitled Workspace",
+        name: payload.name,
         lastFileName: payload.files[0]?.fileName
       });
       setWorkspaceError(null);
@@ -243,6 +245,22 @@ export function useCollaborativeWorkspace(workspaceId: string) {
           : (payload.files[0]?.fileId ?? null);
       });
       showFeedback("Workspace state refreshed from the backend session.");
+    });
+
+    socket.on("workspace-renamed", (payload) => {
+      if (payload.workspaceId !== workspaceId) {
+        return;
+      }
+
+      setWorkspaceName(payload.name);
+      addRecentWorkspace({
+        workspaceId,
+        name: payload.name,
+        lastFileName: filesRef.current.find(
+          (file) => file.fileId === selectedFileIdRef.current
+        )?.fileName
+      });
+      setSyncStatus("synced");
     });
 
     socket.on("code-change", (payload: CodeChangePayload) => {
@@ -695,6 +713,45 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     );
   };
 
+  const renameWorkspace = (name: string, onError?: () => void) => {
+    if (!socketRef.current?.connected) {
+      showFeedback("Cannot rename this workspace right now.");
+      onError?.();
+      return;
+    }
+
+    const previousName = workspaceName;
+    const optimisticName = name.trim() || "Untitled Workspace";
+
+    setWorkspaceName(optimisticName);
+    addRecentWorkspace({
+      workspaceId,
+      name: optimisticName,
+      lastFileName: selectedFile?.fileName
+    });
+    setSyncStatus("syncing");
+    socketRef.current.emit(
+      "rename-workspace",
+      {
+        workspaceId,
+        name
+      },
+      (response?: OperationAck) => {
+        if (!response?.ok) {
+          setWorkspaceName(previousName);
+          addRecentWorkspace({
+            workspaceId,
+            name: previousName,
+            lastFileName: selectedFile?.fileName
+          });
+          showFeedback(response?.error?.message ?? "Workspace rename failed.");
+          setSyncStatus(socketRef.current?.connected ? "synced" : "connection-lost");
+          onError?.();
+        }
+      }
+    );
+  };
+
   const deleteFile = (
     fileId: string,
     onComplete: (response?: OperationAck) => void
@@ -819,12 +876,14 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     localUserId,
     relayoutEditor,
     renameFile,
+    renameWorkspace,
     selectedFile,
     selectedFileId,
     selectFile,
     showFeedback,
     syncStatus,
     replaceAiSelection,
+    workspaceName,
     workspaceError
   };
 }

@@ -16,7 +16,8 @@ import {
   isDeleteFilePayload,
   isFileSelectedPayload,
   isJoinWorkspacePayload,
-  isRenameFilePayload
+  isRenameFilePayload,
+  isRenameWorkspacePayload
 } from "./validation/socketValidation.js";
 import { WorkspaceStateStore } from "./workspaceState.js";
 
@@ -191,6 +192,47 @@ export function registerSocketHandlers(
       logger.info("workspace left", {
         socketId: typedSocket.id,
         workspaceId
+      });
+    });
+
+    typedSocket.on("rename-workspace", (payload, ack) => {
+      if (!isRenameWorkspacePayload(payload)) {
+        emitOperationError(
+          typedSocket,
+          createError(
+            "INVALID_WORKSPACE_NAME",
+            "Enter a valid workspace name.",
+            {
+              ...getPayloadDetails(payload, "rename-workspace")
+            }
+          ),
+          ack
+        );
+        return;
+      }
+
+      const result = workspaceService.renameWorkspace(payload);
+
+      if (!result.ok) {
+        emitOperationError(
+          typedSocket,
+          createError(result.code, result.error, {
+            operation: "rename-workspace",
+            workspaceId: payload.workspaceId
+          }),
+          ack
+        );
+        return;
+      }
+
+      io.to(payload.workspaceId).emit("workspace-renamed", {
+        workspaceId: payload.workspaceId,
+        name: result.name
+      });
+      ack?.({ ok: true });
+      logger.info("workspace renamed", {
+        socketId: typedSocket.id,
+        workspaceId: payload.workspaceId
       });
     });
 

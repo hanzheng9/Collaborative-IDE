@@ -6,7 +6,8 @@ import type {
   DeleteFilePayload,
   FileSelectedPayload,
   JoinWorkspacePayload,
-  RenameFilePayload
+  RenameFilePayload,
+  RenameWorkspacePayload
 } from "../types.js";
 
 export function createError(
@@ -60,6 +61,17 @@ export function isRenameFilePayload(payload: unknown): payload is RenameFilePayl
     isValidWorkspaceId((payload as RenameFilePayload).workspaceId) &&
     isNonEmptyString((payload as RenameFilePayload).fileId) &&
     isNonEmptyString((payload as RenameFilePayload).fileName)
+  );
+}
+
+export function isRenameWorkspacePayload(
+  payload: unknown
+): payload is RenameWorkspacePayload {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    isValidWorkspaceId((payload as RenameWorkspacePayload).workspaceId) &&
+    typeof (payload as RenameWorkspacePayload).name === "string"
   );
 }
 

@@ -113,6 +113,37 @@ describe("Socket.io collaboration", () => {
     expect(bState.files[0]?.content).toBe("latest code");
   });
 
+  it("broadcasts workspace renames to connected collaborators", async () => {
+    const a = client();
+    const b = client();
+    await Promise.all([waitForEvent(a, "connect"), waitForEvent(b, "connect")]);
+    a.emit("join-workspace", { workspaceId: "demo" });
+    b.emit("join-workspace", { workspaceId: "demo" });
+    await Promise.all([
+      waitForEvent(a, "workspace-state"),
+      waitForEvent(b, "workspace-state")
+    ]);
+
+    const renamed = waitForEvent<{ name: string; workspaceId: string }>(
+      b,
+      "workspace-renamed"
+    );
+    const ack = new Promise((resolve) => {
+      a.emit(
+        "rename-workspace",
+        { workspaceId: "demo", name: "  Interview Prep  " },
+        resolve
+      );
+    });
+
+    await expect(ack).resolves.toEqual({ ok: true });
+    await expect(renamed).resolves.toEqual({
+      name: "Interview Prep",
+      workspaceId: "demo"
+    });
+    expect(workspaces.getWorkspaceState("demo").name).toBe("Interview Prep");
+  });
+
   it("broadcasts code changes only to other clients and updates one file", async () => {
     const a = client();
     const b = client();

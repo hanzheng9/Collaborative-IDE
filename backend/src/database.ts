@@ -11,6 +11,7 @@ export type PersistedFile = {
 
 export type PersistedWorkspace = {
   workspaceId: string;
+  name: string;
   files: PersistedFile[];
 };
 
@@ -110,8 +111,8 @@ export async function loadWorkspace(workspaceId: string) {
     return null;
   }
 
-  const workspaceResult = await pool.query<{ id: string }>(
-    "SELECT id FROM workspaces WHERE id = $1",
+  const workspaceResult = await pool.query<{ id: string; name: string }>(
+    "SELECT id, name FROM workspaces WHERE id = $1",
     [workspaceId]
   );
 
@@ -136,6 +137,7 @@ export async function loadWorkspace(workspaceId: string) {
 
   return {
     workspaceId,
+    name: workspaceResult.rows[0].name,
     files: filesResult.rows.map((file) => ({
       fileId: file.id,
       fileName: file.name,
@@ -261,6 +263,21 @@ export async function renameFile(
   );
 
   await updateWorkspaceTimestamp(workspaceId);
+}
+
+export async function renameWorkspace(workspaceId: string, name: string) {
+  if (!pool) {
+    return;
+  }
+
+  await pool.query(
+    `
+      UPDATE workspaces
+      SET name = $2, updated_at = NOW()
+      WHERE id = $1
+    `,
+    [workspaceId, name]
+  );
 }
 
 export async function saveFileContent(

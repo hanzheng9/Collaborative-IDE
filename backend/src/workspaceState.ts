@@ -17,12 +17,34 @@ export const defaultCode = `function greet(name: string) {
 console.log(greet("Collaborative IDE"));
 `;
 
+export const defaultWorkspaceName = "Untitled Workspace";
+export const maxWorkspaceNameLength = 100;
+
 type WorkspaceStateStoreOptions = {
   generateFileId?: () => string;
 };
 
+export function normalizeWorkspaceName(name: string) {
+  const trimmedName = name.trim();
+
+  if (!trimmedName) {
+    return { ok: true as const, name: defaultWorkspaceName };
+  }
+
+  if (trimmedName.length > maxWorkspaceNameLength) {
+    return {
+      ok: false as const,
+      code: "INVALID_WORKSPACE_NAME" as WorkspaceErrorCode,
+      error: `Workspace names must be ${maxWorkspaceNameLength} characters or less.`
+    };
+  }
+
+  return { ok: true as const, name: trimmedName };
+}
+
 export class WorkspaceStateStore {
   private readonly workspaces = new Map<string, Map<string, WorkspaceFile>>();
+  private readonly workspaceNames = new Map<string, string>();
   private readonly generateFileId: () => string;
 
   constructor(options: WorkspaceStateStoreOptions = {}) {
@@ -48,6 +70,29 @@ export class WorkspaceStateStore {
       workspaceId,
       new Map(files.map((file) => [file.fileId, file]))
     );
+    if (!this.workspaceNames.has(workspaceId)) {
+      this.workspaceNames.set(workspaceId, defaultWorkspaceName);
+    }
+  }
+
+  setWorkspaceName(workspaceId: string, name: string) {
+    this.workspaceNames.set(workspaceId, name);
+  }
+
+  renameWorkspace(workspaceId: string, name: string) {
+    const validation = normalizeWorkspaceName(name);
+
+    if (!validation.ok) {
+      return validation;
+    }
+
+    this.workspaceNames.set(workspaceId, validation.name);
+
+    return { ok: true as const, name: validation.name };
+  }
+
+  getWorkspaceName(workspaceId: string) {
+    return this.workspaceNames.get(workspaceId) ?? defaultWorkspaceName;
   }
 
   hasWorkspace(workspaceId: string) {
@@ -64,6 +109,7 @@ export class WorkspaceStateStore {
     if (!files) {
       files = this.createDefaultWorkspace();
       this.workspaces.set(workspaceId, files);
+      this.workspaceNames.set(workspaceId, defaultWorkspaceName);
     }
 
     return files;
@@ -72,6 +118,7 @@ export class WorkspaceStateStore {
   getWorkspaceState(workspaceId: string): WorkspaceState {
     return {
       workspaceId,
+      name: this.getWorkspaceName(workspaceId),
       files: Array.from(this.getWorkspaceFiles(workspaceId).values())
     };
   }

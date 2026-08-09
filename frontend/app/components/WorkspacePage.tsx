@@ -4,6 +4,7 @@ import {
   Chat,
   ChevronLeft,
   ChevronRight,
+  Edit,
   Play,
   Share,
   StopFilledAlt,
@@ -125,13 +126,15 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
     localUserId,
     relayoutEditor,
     renameFile,
+    renameWorkspace,
     selectedFile,
     selectedFileId,
     selectFile,
     showFeedback,
     syncStatus,
     replaceAiSelection,
-    workspaceError
+    workspaceError,
+    workspaceName
   } = useCollaborativeWorkspace(workspaceId);
   const executionAbortRef = useRef<AbortController | null>(null);
   const executionRequestIdRef = useRef(0);
@@ -155,6 +158,37 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
   const [isLeavingWorkspace, setIsLeavingWorkspace] = useState(false);
   const [isTerminalInfoOpen, setIsTerminalInfoOpen] = useState(false);
+  const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
+  const [workspaceNameDraft, setWorkspaceNameDraft] = useState(workspaceName);
+
+  const finishWorkspaceNameEdit = useCallback(() => {
+    const nextName = workspaceNameDraft.trim() || "Untitled Workspace";
+
+    setIsEditingWorkspaceName(false);
+    if (nextName !== workspaceName) {
+      renameWorkspace(nextName, () => {
+        setWorkspaceNameDraft(workspaceName);
+      });
+    } else {
+      setWorkspaceNameDraft(workspaceName);
+    }
+  }, [renameWorkspace, workspaceName, workspaceNameDraft]);
+
+  const cancelWorkspaceNameEdit = useCallback(() => {
+    setWorkspaceNameDraft(workspaceName);
+    setIsEditingWorkspaceName(false);
+  }, [workspaceName]);
+
+  const startWorkspaceNameEdit = () => {
+    setWorkspaceNameDraft(workspaceName);
+    setIsEditingWorkspaceName(true);
+  };
+
+  useEffect(() => {
+    if (!isEditingWorkspaceName) {
+      setWorkspaceNameDraft(workspaceName);
+    }
+  }, [isEditingWorkspaceName, workspaceName]);
 
   const shareWorkspace = async () => {
     try {
@@ -540,7 +574,53 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
               CI
             </div>
             <div>
-              <h1>Collaborative IDE</h1>
+              <div className="workspaceTitleRow">
+                {isEditingWorkspaceName ? (
+                  <input
+                    aria-label="Workspace name"
+                    autoFocus
+                    className="workspaceNameInput"
+                    maxLength={100}
+                    value={workspaceNameDraft}
+                    onBlur={finishWorkspaceNameEdit}
+                    onChange={(event) => setWorkspaceNameDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        finishWorkspaceNameEdit();
+                      }
+
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        cancelWorkspaceNameEdit();
+                      }
+                    }}
+                  />
+                ) : (
+                  <>
+                    <h1>
+                      <button
+                        className="workspaceNameButton"
+                        type="button"
+                        onClick={startWorkspaceNameEdit}
+                      >
+                        {workspaceName}
+                      </button>
+                    </h1>
+                    <Button
+                      hasIconOnly
+                      className="workspaceNameEditButton"
+                      iconDescription="Rename workspace"
+                      kind="ghost"
+                      renderIcon={Edit}
+                      size="sm"
+                      tooltipPosition="bottom"
+                      type="button"
+                      onClick={startWorkspaceNameEdit}
+                    />
+                  </>
+                )}
+              </div>
               <p>
                 {selectedFile ? selectedFile.fileName : "No file selected"}
                 <span>Workspace {workspaceId}</span>

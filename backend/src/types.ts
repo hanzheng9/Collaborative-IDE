@@ -16,8 +16,10 @@ export type {
   JoinWorkspacePayload,
   OperationAck,
   RenameFilePayload,
+  RenameWorkspacePayload,
   ServerToClientEvents,
   WorkspaceFile,
+  WorkspaceRenamedPayload,
   WorkspaceState,
   WorkspaceStatePayload
 } from "@collaborative-ide/shared";
