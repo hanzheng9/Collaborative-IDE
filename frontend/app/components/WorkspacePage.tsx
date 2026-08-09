@@ -570,9 +570,6 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
       <main className="page">
         <header className="topbar">
           <div className="brandCluster">
-            <div className="appMark" aria-hidden="true">
-              CI
-            </div>
             <div>
               <div className="workspaceTitleRow">
                 {isEditingWorkspaceName ? (
@@ -597,28 +594,17 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
                     }}
                   />
                 ) : (
-                  <>
-                    <h1>
-                      <button
-                        className="workspaceNameButton"
-                        type="button"
-                        onClick={startWorkspaceNameEdit}
-                      >
-                        {workspaceName}
-                      </button>
-                    </h1>
-                    <Button
-                      hasIconOnly
-                      className="workspaceNameEditButton"
-                      iconDescription="Rename workspace"
-                      kind="ghost"
-                      renderIcon={Edit}
-                      size="sm"
-                      tooltipPosition="bottom"
+                  <h1>
+                    <button
+                      className="workspaceNameButton"
+                      title="Rename workspace"
                       type="button"
                       onClick={startWorkspaceNameEdit}
-                    />
-                  </>
+                    >
+                      <span>{workspaceName}</span>
+                      <Edit aria-hidden="true" size={16} />
+                    </button>
+                  </h1>
                 )}
               </div>
               <p>

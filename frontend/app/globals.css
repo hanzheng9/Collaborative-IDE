@@ -65,11 +65,11 @@ textarea:focus-visible,
 }
 
 .brandCluster {
-  gap: 10px;
+  gap: 0;
   overflow: hidden;
 }
 
-.brandCluster > div:last-child {
+.brandCluster > div {
   min-width: 0;
   overflow: hidden;
 }
@@ -95,20 +95,23 @@ textarea:focus-visible,
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0;
+  line-height: 28px;
 }
 
 .workspaceTitleRow {
   display: flex;
   min-width: 0;
+  height: 26px;
   align-items: center;
-  gap: 8px;
   overflow: hidden;
 }
 
 .workspaceNameButton {
-  display: block;
+  display: inline-flex;
   max-width: 100%;
-  min-height: 28px;
+  height: 26px;
+  align-items: center;
+  gap: 8px;
   border: 0;
   border-radius: var(--ide-radius);
   background: transparent;
@@ -116,10 +119,8 @@ textarea:focus-visible,
   cursor: text;
   font: inherit;
   overflow: hidden;
-  padding: 2px 0;
+  padding: 0;
   text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .workspaceNameButton:hover,
@@ -127,13 +128,17 @@ textarea:focus-visible,
   color: var(--ide-primary);
 }
 
-.workspaceNameEditButton {
-  width: 28px;
-  height: 28px;
+.workspaceNameButton span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceNameButton svg {
+  display: block;
   flex: 0 0 auto;
-  min-width: 28px;
-  min-height: 28px;
-  align-self: center;
+  transform: translateY(-2px);
 }
 
 .workspaceNameInput {
