@@ -43,8 +43,9 @@ textarea:focus-visible,
   display: grid;
   min-width: 0;
   align-items: center;
-  gap: 16px;
-  grid-template-columns: minmax(260px, 1fr) auto auto;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, auto);
+  overflow: hidden;
   border-bottom: 1px solid var(--ide-border);
   background: var(--ide-surface);
   padding: 0 12px;
@@ -65,6 +66,12 @@ textarea:focus-visible,
 
 .brandCluster {
   gap: 10px;
+  overflow: hidden;
+}
+
+.brandCluster > div:last-child {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .appMark {
@@ -82,6 +89,7 @@ textarea:focus-visible,
 }
 
 .topbar h1 {
+  min-width: 0;
   margin: 0;
   color: var(--ide-text);
   font-size: 14px;
@@ -94,10 +102,12 @@ textarea:focus-visible,
   min-width: 0;
   align-items: center;
   gap: 4px;
+  overflow: hidden;
 }
 
 .workspaceNameButton {
-  max-width: min(420px, 42vw);
+  display: block;
+  max-width: 100%;
   border: 0;
   background: transparent;
   color: inherit;
@@ -116,12 +126,14 @@ textarea:focus-visible,
 }
 
 .workspaceNameEditButton {
+  flex: 0 0 auto;
   min-width: 28px;
   min-height: 28px;
 }
 
 .workspaceNameInput {
-  width: min(420px, 42vw);
+  width: min(420px, 100%);
+  min-width: 0;
   border: 1px solid var(--ide-border-strong);
   border-radius: var(--ide-radius);
   background: var(--ide-surface);
@@ -141,15 +153,25 @@ textarea:focus-visible,
   color: var(--ide-text-muted);
   font-size: 12px;
   line-height: 1.2;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .topbar p span {
   color: var(--ide-text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .headerMeta,
 .topbarActions {
   gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.topbarActions {
+  justify-content: flex-end;
 }
 
 .avatarStack {
@@ -1205,7 +1227,13 @@ textarea:focus-visible,
 }
 
 .cds--tag {
+  min-width: 0;
   margin: 0;
+}
+
+.headerMeta .cds--tag__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 1100px) {
