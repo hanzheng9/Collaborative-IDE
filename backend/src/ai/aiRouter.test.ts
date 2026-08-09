@@ -57,10 +57,11 @@ describe("AI assistant route", () => {
 
     await request(app)
       .post("/api/ai/assist")
-      .send({ action: "explain", code: "x".repeat(12001) })
+      .send({ action: "explain", code: "x".repeat(2001) })
       .expect(400)
       .expect(({ body }) => {
         expect(body.error).toMatch(/too large/i);
+        expect(body.error).toMatch(/2000/);
       });
   });
 

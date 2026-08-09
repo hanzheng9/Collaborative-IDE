@@ -45,6 +45,33 @@ describe("AiAssistantPanel", () => {
     ).toBeInTheDocument();
   });
 
+  it("opens and closes the AI limits information modal", async () => {
+    render(
+      <AiAssistantPanel
+        getSelection={() => selection}
+        onClose={vi.fn()}
+        onReplaceSelection={vi.fn()}
+      />
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /ai assistant limits/i })
+    );
+
+    expect(
+      screen.getByRole("heading", { name: /ai assistant limits/i })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/selected code is limited/i)).toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("heading", { name: /ai assistant limits/i })
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it("sends selected code and metadata", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
@@ -134,14 +161,10 @@ describe("AiAssistantPanel", () => {
     expect(await screen.findByText(/retry ok/i)).toBeInTheDocument();
   });
 
-  it("copies the response", async () => {
+  it("does not show a full-response copy button", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      await jsonResponse({ action: "explain", result: "Copy this" })
+      await jsonResponse({ action: "explain", result: "Do not copy all of this" })
     );
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, {
-      clipboard: { writeText }
-    });
 
     render(
       <AiAssistantPanel
@@ -152,10 +175,33 @@ describe("AiAssistantPanel", () => {
     );
 
     await userEvent.click(screen.getByRole("button", { name: /explain/i }));
-    expect(await screen.findByText(/copy this/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /copy/i }));
+    expect(await screen.findByText(/do not copy all of this/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /copy/i })).not.toBeInTheDocument();
+  });
 
-    expect(writeText).toHaveBeenCalledWith("Copy this");
+  it("shows rate limits as a friendly limit message", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      await jsonResponse(
+        { error: "Too many AI requests. Try again in about 8 minutes." },
+        false,
+        429
+      )
+    );
+
+    render(
+      <AiAssistantPanel
+        getSelection={() => selection}
+        onClose={vi.fn()}
+        onReplaceSelection={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /explain/i }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      /too many ai requests/i
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("does not replace code automatically and replaces only after explicit action", async () => {

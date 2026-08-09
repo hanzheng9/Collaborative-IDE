@@ -138,9 +138,10 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
   const editorColumnRef = useRef<HTMLElement | null>(null);
   const previousExpandedPanelHeightRef = useRef(defaultPanelHeight);
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
-  const [isPanelCollapsed, setIsPanelCollapsed] = useState(getSavedCollapsedState);
-  const [panelHeight, setPanelHeight] = useState(getSavedPanelHeight);
-  const [panelTab, setPanelTab] = useState<BottomPanelTab>(getSavedPanelTab);
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
+  const [panelHeight, setPanelHeight] = useState(defaultPanelHeight);
+  const [panelMaxHeight, setPanelMaxHeight] = useState(defaultPanelHeight);
+  const [panelTab, setPanelTab] = useState<BottomPanelTab>("output");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isRunningCode, setIsRunningCode] = useState(false);
   const [executionError, setExecutionError] = useState("");
@@ -154,10 +155,6 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
   const [isLeavingWorkspace, setIsLeavingWorkspace] = useState(false);
   const [isTerminalInfoOpen, setIsTerminalInfoOpen] = useState(false);
-
-  useEffect(() => {
-    previousExpandedPanelHeightRef.current = panelHeight;
-  }, []);
 
   const shareWorkspace = async () => {
     try {
@@ -228,6 +225,26 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
     );
   }, []);
 
+  const updatePanelMaxHeight = useCallback(() => {
+    setPanelMaxHeight(getPanelMaxHeight());
+  }, [getPanelMaxHeight]);
+
+  useEffect(() => {
+    const savedHeight = getSavedPanelHeight();
+
+    previousExpandedPanelHeightRef.current = savedHeight;
+    setPanelHeight(savedHeight);
+    setIsPanelCollapsed(getSavedCollapsedState());
+    setPanelTab(getSavedPanelTab());
+  }, []);
+
+  useEffect(() => {
+    updatePanelMaxHeight();
+    window.addEventListener("resize", updatePanelMaxHeight);
+
+    return () => window.removeEventListener("resize", updatePanelMaxHeight);
+  }, [updatePanelMaxHeight]);
+
   const savePanelPreference = useCallback(
     (nextState: {
       collapsed?: boolean;
@@ -261,11 +278,13 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
 
   const setExpandedPanelHeight = useCallback(
     (nextHeight: number) => {
+      const maxHeight = getPanelMaxHeight();
       const constrainedHeight = Math.min(
-        getPanelMaxHeight(),
+        maxHeight,
         Math.max(minExpandedPanelHeight, Math.round(nextHeight))
       );
 
+      setPanelMaxHeight(maxHeight);
       previousExpandedPanelHeightRef.current = constrainedHeight;
       setPanelHeight(constrainedHeight);
       setIsPanelCollapsed(false);
@@ -716,7 +735,7 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
             <div
               aria-label="Resize lower panel"
               aria-orientation="horizontal"
-              aria-valuemax={getPanelMaxHeight()}
+              aria-valuemax={panelMaxHeight}
               aria-valuemin={collapsedPanelHeight}
               aria-valuenow={isPanelCollapsed ? collapsedPanelHeight : panelHeight}
               className="panelResizeHandle"

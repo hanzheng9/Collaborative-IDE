@@ -1,7 +1,14 @@
 import { aiActions, type AiAction, type AiAssistRequest } from "./aiTypes.js";
 
-const maxCodeLength = 12000;
-const maxContextLength = 8000;
+function getPositiveNumber(value: string | undefined, fallback: number) {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : fallback;
+}
+
+export const aiRequestLimits = {
+  maxCodeLength: getPositiveNumber(process.env.AI_MAX_CODE_CHARS, 2000),
+  maxContextLength: getPositiveNumber(process.env.AI_MAX_CONTEXT_CHARS, 1500)
+};
 
 type ValidationResult =
   | { ok: true; request: AiAssistRequest }
@@ -41,14 +48,17 @@ export function validateAiAssistRequest(body: unknown): ValidationResult {
 
   const code = record.code.trim();
 
-  if (code.length > maxCodeLength) {
+  if (code.length > aiRequestLimits.maxCodeLength) {
     return {
       ok: false,
-      error: `Selected code is too large. Keep it under ${maxCodeLength} characters.`
+      error: `Selected code is too large. Keep it under ${aiRequestLimits.maxCodeLength} characters.`
     };
   }
 
-  const surroundingCode = trimOptionalString(record.surroundingCode, maxContextLength);
+  const surroundingCode = trimOptionalString(
+    record.surroundingCode,
+    aiRequestLimits.maxContextLength
+  );
 
   return {
     ok: true,

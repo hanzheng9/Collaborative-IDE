@@ -1,8 +1,11 @@
 "use client";
 
+import { Information } from "@carbon/icons-react";
+import { Button } from "@carbon/react";
 import { useEffect, useRef, useState } from "react";
 import {
   aiActionLabels,
+  AiAssistError,
   extractReplacementCode,
   requestAiAssist,
   type AiAction,
@@ -10,6 +13,7 @@ import {
 } from "../aiAssistant";
 import type { AiCodeSelection } from "../hooks/useCollaborativeWorkspace";
 import { AiActionToolbar } from "./AiActionToolbar";
+import { AiInfoModal } from "./AiInfoModal";
 import { AiResultView } from "./AiResultView";
 
 type AiAssistantPanelProps = {
@@ -31,7 +35,9 @@ export function AiAssistantPanel({
   const [activeAction, setActiveAction] = useState<AiAction | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [lastAction, setLastAction] = useState<AiAction | null>(null);
+  const [limitMessage, setLimitMessage] = useState("");
   const [result, setResult] = useState<AiAssistResult | null>(null);
   const [selection, setSelection] = useState<AiCodeSelection | null>(() =>
     getSelection()
@@ -50,6 +56,7 @@ export function AiAssistantPanel({
     setIsLoading(true);
     setLastAction(action);
     setError("");
+    setLimitMessage("");
     setResult(null);
 
     const currentSelection = getSelection() ?? selection;
@@ -60,6 +67,7 @@ export function AiAssistantPanel({
       setSelection(null);
       setResult(null);
       setError("Select some code in the editor to use the AI assistant.");
+      setLimitMessage("");
       return;
     }
 
@@ -86,11 +94,17 @@ export function AiAssistantPanel({
         return;
       }
 
-      setError(
+      const message =
         requestError instanceof Error
           ? requestError.message
-          : "AI assistant request failed."
-      );
+          : "AI assistant request failed.";
+
+      if (requestError instanceof AiAssistError && requestError.status === 429) {
+        setLimitMessage(message);
+        return;
+      }
+
+      setError(message);
     } finally {
       if (requestIdRef.current === requestId) {
         setIsLoading(false);
@@ -102,19 +116,6 @@ export function AiAssistantPanel({
   const retry = () => {
     if (lastAction) {
       void runAction(lastAction);
-    }
-  };
-
-  const copyResult = async () => {
-    if (!result) {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(result.result);
-      setError("");
-    } catch {
-      setError("Could not copy the AI response.");
     }
   };
 
@@ -149,9 +150,28 @@ export function AiAssistantPanel({
           <h2>AI Assistant</h2>
           <p>{selection ? selection.fileName : "No code selected"}</p>
         </div>
-        <button type="button" onClick={onClose}>
-          Close
-        </button>
+        <div className="aiPanelHeaderActions">
+          <Button
+            hasIconOnly
+            className="aiPanelHeaderButton"
+            iconDescription="AI assistant limits"
+            kind="ghost"
+            renderIcon={Information}
+            size="sm"
+            tooltipPosition="left"
+            type="button"
+            onClick={() => setIsInfoOpen(true)}
+          />
+          <Button
+            className="aiPanelHeaderButton"
+            kind="ghost"
+            size="sm"
+            type="button"
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        </div>
       </div>
 
       <AiActionToolbar
@@ -162,6 +182,7 @@ export function AiAssistantPanel({
           setActiveAction(action);
           setLastAction(action);
           setError("");
+          setLimitMessage("");
           setResult(null);
         }}
       />
@@ -183,14 +204,15 @@ export function AiAssistantPanel({
             </button>
           ) : null}
         </div>
+      ) : limitMessage ? (
+        <div className="aiLimit" role="status">
+          <p>{limitMessage}</p>
+        </div>
       ) : result ? (
         <>
           <div className="aiResultHeader">
             <span>{aiActionLabels[result.action]}</span>
             <div>
-              <button type="button" onClick={copyResult}>
-                Copy
-              </button>
               {canReplace ? (
                 <button type="button" onClick={replaceSelection}>
                   Replace Selection
@@ -203,6 +225,10 @@ export function AiAssistantPanel({
       ) : (
         <div className="aiState">Choose an action for the selected code.</div>
       )}
+
+      {isInfoOpen ? (
+        <AiInfoModal onClose={() => setIsInfoOpen(false)} />
+      ) : null}
     </aside>
   );
 }

@@ -63,9 +63,8 @@ function persistThemePreference(preference: ThemePreference) {
 }
 
 export function useThemePreference() {
-  const [themePreference, setThemePreferenceState] = useState<ThemePreference>(
-    getSavedThemePreference
-  );
+  const [themePreference, setThemePreferenceState] =
+    useState<ThemePreference>("light");
   const resolvedTheme = useMemo<ResolvedTheme>(
     () => themePreference,
     [themePreference]
@@ -80,6 +79,10 @@ export function useThemePreference() {
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.style.colorScheme = resolvedTheme;
   }, [resolvedTheme]);
+
+  useEffect(() => {
+    setThemePreferenceState(getSavedThemePreference());
+  }, []);
 
   const setThemePreference = (nextPreference: ThemePreference) => {
     setThemePreferenceState(nextPreference);

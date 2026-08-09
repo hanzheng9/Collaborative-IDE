@@ -351,7 +351,7 @@ describe("WorkspacePage execution", () => {
   });
 
   it("shows an expired workspace state", async () => {
-    vi.mocked(useCollaborativeWorkspace).mockReturnValueOnce({
+    vi.mocked(useCollaborativeWorkspace).mockReturnValue({
       collaborators: [],
       connectionStatus: "connected",
       createFile: vi.fn(),

@@ -93,6 +93,7 @@ export class AiService {
       logger.warn("AI provider request failed", {
         action: request.action,
         durationMs: Date.now() - startedAt,
+        providerError: this.getProviderErrorMessage(error),
         statusCode
       });
 
@@ -123,5 +124,17 @@ export class AiService {
     }
 
     return 503;
+  }
+
+  private getProviderErrorMessage(error: unknown) {
+    if (error instanceof OpenAI.APIError) {
+      return error.message;
+    }
+
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return "unknown provider error";
   }
 }

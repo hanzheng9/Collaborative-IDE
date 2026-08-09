@@ -725,6 +725,22 @@ textarea:focus-visible,
   padding: 10px 12px;
 }
 
+.aiPanelHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.aiPanelHeaderActions .aiPanelHeaderButton {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .aiPanelHeader h2 {
   margin: 0;
   color: var(--ide-text);
@@ -779,7 +795,8 @@ textarea:focus-visible,
 }
 
 .aiState,
-.aiError {
+.aiError,
+.aiLimit {
   color: var(--ide-text-muted);
   font-size: 13px;
   line-height: 1.5;
@@ -792,6 +809,14 @@ textarea:focus-visible,
 
 .aiError p {
   margin: 0 0 10px;
+}
+
+.aiLimit {
+  color: var(--ide-text);
+}
+
+.aiLimit p {
+  margin: 0;
 }
 
 .aiResultHeader span {
@@ -811,7 +836,7 @@ textarea:focus-visible,
   overflow: auto;
   color: var(--ide-text);
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.5;
   padding: 12px 14px 18px;
 }
 
@@ -819,17 +844,78 @@ textarea:focus-visible,
   margin-top: 0;
 }
 
+.aiResult h1,
+.aiResult h2,
+.aiResult h3 {
+  margin: 16px 0 8px;
+  color: var(--ide-text);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.aiResult p {
+  margin: 0 0 10px;
+}
+
+.aiResult ul,
+.aiResult ol {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.aiResult li {
+  margin: 4px 0;
+}
+
 .aiResult pre {
   overflow: auto;
   border: 1px solid var(--ide-border);
   border-radius: var(--ide-radius);
   background: var(--ide-surface-subtle);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 8px 0 14px;
   padding: 10px;
 }
 
 .aiResult code {
   color: var(--ide-code-text);
   font-family: var(--ide-font-mono);
+}
+
+.aiResult :not(pre) > code {
+  border: 1px solid var(--ide-border);
+  border-radius: 4px;
+  background: var(--ide-surface-subtle);
+  font-size: 12px;
+  padding: 1px 4px;
+}
+
+.aiInfo {
+  display: grid;
+  max-height: min(56vh, 520px);
+  gap: 18px;
+  overflow: auto;
+  color: var(--ide-text);
+}
+
+.aiInfo h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.aiInfo p,
+.aiInfo ul {
+  margin: 0;
+  color: var(--ide-text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.aiInfo ul {
+  padding-left: 20px;
 }
 
 .remoteCursor {

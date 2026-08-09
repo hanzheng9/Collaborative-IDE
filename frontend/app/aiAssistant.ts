@@ -17,6 +17,16 @@ export type AiAssistResult = {
   result: string;
 };
 
+export class AiAssistError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "AiAssistError";
+    this.status = status;
+  }
+}
+
 export async function requestAiAssist(
   action: AiAction,
   selection: AiCodeSelection,
@@ -42,7 +52,10 @@ export async function requestAiAssist(
   };
 
   if (!response.ok) {
-    throw new Error(body.error ?? "AI assistant request failed.");
+    throw new AiAssistError(
+      body.error ?? "AI assistant request failed.",
+      response.status
+    );
   }
 
   if (!body.result || !body.action) {

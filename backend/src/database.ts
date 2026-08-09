@@ -54,16 +54,46 @@ export async function migrateDatabase() {
     );
 
     CREATE TABLE IF NOT EXISTS files (
-      id TEXT PRIMARY KEY,
+      id TEXT NOT NULL,
       workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       language TEXT NOT NULL,
       content TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (workspace_id, id)
     );
 
     CREATE INDEX IF NOT EXISTS files_workspace_id_idx ON files(workspace_id);
+
+    DO $$
+    DECLARE
+      current_primary_key_name TEXT;
+      current_primary_key_definition TEXT;
+    BEGIN
+      SELECT conname, pg_get_constraintdef(oid)
+      INTO current_primary_key_name, current_primary_key_definition
+      FROM pg_constraint
+      WHERE conrelid = 'files'::regclass AND contype = 'p';
+
+      IF current_primary_key_name IS NOT NULL
+        AND current_primary_key_definition <> 'PRIMARY KEY (workspace_id, id)'
+      THEN
+        EXECUTE format(
+          'ALTER TABLE files DROP CONSTRAINT %I',
+          current_primary_key_name
+        );
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'files'::regclass AND contype = 'p'
+      )
+      THEN
+        ALTER TABLE files ADD CONSTRAINT files_pkey PRIMARY KEY (workspace_id, id);
+      END IF;
+    END $$;
   `);
 
   logger.info("PostgreSQL persistence enabled");
@@ -166,7 +196,7 @@ export async function createWorkspace(
         `
           INSERT INTO files (id, workspace_id, name, language, content)
           VALUES ($1, $2, $3, $4, $5)
-          ON CONFLICT (id) DO NOTHING
+          ON CONFLICT (workspace_id, id) DO NOTHING
         `,
         [file.fileId, workspaceId, file.fileName, file.language, file.content]
       );
@@ -193,7 +223,7 @@ export async function saveFile(
     `
       INSERT INTO files (id, workspace_id, name, language, content)
       VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (id) DO UPDATE SET
+      ON CONFLICT (workspace_id, id) DO UPDATE SET
         name = EXCLUDED.name,
         language = EXCLUDED.language,
         content = EXCLUDED.content,

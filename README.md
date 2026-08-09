@@ -333,8 +333,11 @@ Do not prefix these with `NEXT_PUBLIC_`.
 Optional local AI rate-limit overrides:
 
 ```bash
-AI_RATE_LIMIT_MAX="20"
+AI_RATE_LIMIT_MAX="5"
 AI_RATE_LIMIT_WINDOW_MS="600000"
+AI_MAX_CODE_CHARS="2000"
+AI_MAX_CONTEXT_CHARS="1500"
+AI_MAX_OUTPUT_TOKENS="400"
 ```
 
 For local testing, you can temporarily increase `AI_RATE_LIMIT_MAX` or lower `AI_RATE_LIMIT_WINDOW_MS`. Restart the backend after changing these values.
@@ -437,8 +440,10 @@ The current tests cover:
 - Direct unknown workspace URLs are not silently created when PostgreSQL persistence is enabled.
 - On reconnect, the backend session state for the current workspace URL is treated as authoritative.
 - Deleted files are removed by stable `fileId`; stale updates for deleted files are rejected.
-- AI requests are limited to 20 requests per IP every 10 minutes.
-- AI selected code is limited to 12,000 characters.
+- AI requests are limited to 5 requests per IP every 10 minutes by default.
+- AI selected code is limited to 2,000 characters by default.
+- AI surrounding context is trimmed to 1,500 characters by default.
+- AI responses are capped at 400 output tokens by default.
 - AI output is rendered as untrusted Markdown with raw HTML disabled.
 - AI-generated code is never executed or inserted automatically.
 

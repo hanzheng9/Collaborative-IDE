@@ -46,7 +46,7 @@ export function createAiRouter(options: AiRouterOptions = {}) {
   const service = options.service ?? new AiService();
   const rateLimitMax =
     options.rateLimitMax ??
-    getPositiveNumber(process.env.AI_RATE_LIMIT_MAX, 20);
+    getPositiveNumber(process.env.AI_RATE_LIMIT_MAX, 5);
   const rateLimitWindowMs =
     options.rateLimitWindowMs ??
     getPositiveNumber(process.env.AI_RATE_LIMIT_WINDOW_MS, 10 * 60 * 1000);
