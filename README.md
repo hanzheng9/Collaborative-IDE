@@ -22,17 +22,33 @@ A full-stack real-time collaborative code editor inspired by Google Docs for cod
 
 ![Collaborative IDE output panel showing a successful code execution result.](docs/screenshots/code-execution.png)
 
-<!--
-Future screenshot:
-docs/screenshots/realtime-collaboration.png
-Suggested screenshot: two browser windows in the same workspace showing live sync.
--->
+### Real-Time Collaboration
+
+![Collaborative IDE workspace with three connected collaborators and remote cursor indicators in Monaco.](docs/screenshots/realtime-collaboration.png)
+
+### AI Assistant
+
+![Collaborative IDE AI assistant panel showing selected-code bug fix output and a Replace Selection review action.](docs/screenshots/ai-assistant.png)
+
+### Short Demo GIF
 
 <!--
-Future screenshot:
-docs/screenshots/ai-assistant.png
-Suggested screenshot: selected-code AI assistant showing Generate Tests or Fix Bug
-with Markdown response and explicit Replace Selection button.
+Add a 10-15 second GIF:
+docs/screenshots/demo-short.gif
+Suggested flow: create or open a workspace, type in Monaco, show another tab
+receiving the update, and briefly show the collaborator cursor.
+-->
+
+### Full Demo Video
+
+<!--
+Add a longer walkthrough video link here.
+Suggested flow: landing page, shareable workspace URL, multi-file editing,
+real-time collaboration, AI assistant, code execution, theme toggle, and
+persistence after refresh.
+
+Example:
+[Watch the full demo](https://your-demo-video-link.example)
 -->
 
 ## Why This Project Is Interesting
