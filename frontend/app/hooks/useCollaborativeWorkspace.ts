@@ -154,18 +154,30 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     const viewState = editor.saveViewState();
     const position = editor.getPosition();
 
-    applyingRemoteChangeRef.current = true;
-    editor.setValue(code);
+    try {
+      applyingRemoteChangeRef.current = true;
+      editor.setValue(code);
 
-    if (viewState) {
-      editor.restoreViewState(viewState);
+      if (viewState) {
+        editor.restoreViewState(viewState);
+      }
+
+      if (position) {
+        editor.setPosition(position);
+      }
+
+      const restoredPosition = editor.getPosition();
+
+      if (restoredPosition) {
+        currentCursorRef.current = {
+          lineNumber: restoredPosition.lineNumber,
+          column: restoredPosition.column
+        };
+        setCursorPosition(currentCursorRef.current);
+      }
+    } finally {
+      applyingRemoteChangeRef.current = false;
     }
-
-    if (position) {
-      editor.setPosition(position);
-    }
-
-    applyingRemoteChangeRef.current = false;
   };
 
   useEffect(() => {
@@ -402,14 +414,6 @@ export function useCollaborativeWorkspace(workspaceId: string) {
       workspaceId,
       fileId: selectedFileId
     });
-
-    if (currentCursorRef.current) {
-      socket.emit("cursor-change", {
-        workspaceId,
-        fileId: selectedFileId,
-        cursorPosition: currentCursorRef.current
-      });
-    }
   }, [selectedFileId, workspaceId]);
 
   useEffect(() => {
@@ -477,20 +481,29 @@ export function useCollaborativeWorkspace(workspaceId: string) {
           collaborator.currentFileId === selectedFileId &&
           collaborator.cursorPosition
       )
-      .map((collaborator) => ({
-        range: {
-          startLineNumber: collaborator.cursorPosition?.lineNumber ?? 1,
-          startColumn: collaborator.cursorPosition?.column ?? 1,
-          endLineNumber: collaborator.cursorPosition?.lineNumber ?? 1,
-          endColumn: collaborator.cursorPosition?.column ?? 1
-        },
-        options: {
-          className: `remoteCursor ${getCollaboratorClassName(
-            collaborator.userId
-          )}`,
-          hoverMessage: { value: collaborator.displayName }
+      .map((collaborator) => {
+        const cursorPosition = collaborator.cursorPosition;
+
+        if (!cursorPosition) {
+          return null;
         }
-      }));
+
+        return {
+          range: {
+            startLineNumber: cursorPosition.lineNumber,
+            startColumn: cursorPosition.column,
+            endLineNumber: cursorPosition.lineNumber,
+            endColumn: cursorPosition.column
+          },
+          options: {
+            className: `remoteCursor ${getCollaboratorClassName(
+              collaborator.userId
+            )}`,
+            hoverMessage: { value: collaborator.displayName }
+          }
+        };
+      })
+      .filter((decoration) => decoration !== null);
 
     remoteCursorDecorationIdsRef.current = editor.deltaDecorations(
       remoteCursorDecorationIdsRef.current,
@@ -516,6 +529,10 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     }
 
     cursorListenerRef.current = editor.onDidChangeCursorPosition((event) => {
+      if (applyingRemoteChangeRef.current) {
+        return;
+      }
+
       const fileId = selectedFileIdRef.current;
 
       if (!fileId) {

@@ -1,186 +1,244 @@
 # Collaborative IDE
 
-A local full-stack collaborative code editor prototype built with Next.js, TypeScript, Monaco Editor, Express, and Socket.io.
+A full-stack real-time collaborative code editor inspired by Google Docs for code. Collaborative IDE supports shareable multi-file workspaces, live multi-user editing, persistent workspace storage, sandboxed code execution, and selected-code AI assistance.
 
-The app supports real-time multi-file editing across browser tabs, collaborator awareness, remote text cursors, click-to-jump navigation, selected-code AI assistance, local code execution through a backend execution API, and optional PostgreSQL persistence. The in-memory workspace remains the live source of truth while the server is running, and PostgreSQL is used for durable storage across restarts.
+[Live Demo](https://collaborative-ide-frontend.vercel.app)
 
-## Features
+## Demo
 
-- Multi-file workspaces with independent shareable URLs
-- Shareable workspace URLs such as `/workspace/abc123`
-- Landing page for creating or joining workspaces
-- Anonymous collaborators with temporary names such as `User4837`
-- Explicit Leave Workspace action for removing only live presence
-- Browser-local recent workspace history
+### Landing Page
+
+![Collaborative IDE landing page with Create Workspace and Join Existing Workspace controls.](docs/screenshots/landing-page.png)
+
+### Editor Workspace
+
+![Light-mode Collaborative IDE workspace with Monaco editor, file sidebar, output panel, collaborators, and status bar.](docs/screenshots/editor-light.png)
+
+### Dark Mode
+
+![Dark-mode Collaborative IDE workspace with synchronized editor, file explorer, bottom panel, and status bar.](docs/screenshots/editor-dark.png)
+
+### Code Execution
+
+![Collaborative IDE output panel showing a successful code execution result.](docs/screenshots/code-execution.png)
+
+<!--
+Future screenshot:
+docs/screenshots/realtime-collaboration.png
+Suggested screenshot: two browser windows in the same workspace showing live sync.
+-->
+
+<!--
+Future screenshot:
+docs/screenshots/ai-assistant.png
+Suggested screenshot: selected-code AI assistant showing Generate Tests or Fix Bug
+with Markdown response and explicit Replace Selection button.
+-->
+
+## Why This Project Is Interesting
+
+Collaborative IDE is not just a Monaco editor wrapper. It combines real-time synchronization, durable workspace persistence, ephemeral collaborator awareness, external code execution, AI-assisted editing, and public-deployment safety controls in one full-stack TypeScript application.
+
+The project intentionally separates live collaboration state from durable storage:
+
+- Memory is authoritative while the backend is running.
+- PostgreSQL provides persistence across restarts.
+- Socket.io handles live updates, presence, file selection, and cursor awareness.
+- Presence and cursors are ephemeral and never persisted.
+- User code is executed by external sandbox providers, never directly inside Express.
+
+## Tech Stack
+
+| Area | Technology |
+| --- | --- |
+| Frontend | Next.js, React, TypeScript, Carbon React |
+| Editor | Monaco Editor |
+| Real-time | Socket.io |
+| Backend | Node.js, Express, TypeScript |
+| Database | PostgreSQL, Neon |
+| AI | Azure AI Foundry / Azure OpenAI `gpt-5-nano` |
+| Code execution | Piston locally, Judge0/RapidAPI in production |
+| Deployment | Vercel frontend, Railway backend |
+| Testing | Vitest, Testing Library, Supertest |
+
+## Core Features
+
+- Shareable `/workspace/{workspaceId}` URLs
+- Anonymous collaborative workspaces
+- Real-time multi-user code synchronization
+- Multi-file workspace model
 - Create, rename, delete, and switch files
-- In-app create, rename, and delete confirmation dialogs with validation
-- Duplicate filename feedback
-- Monaco Editor with language detection by file extension
-- Per-file editor view state for cursor and scroll restoration
-- Real-time code synchronization across connected tabs
-- New tabs receive the latest workspace state
-- Optional PostgreSQL persistence for workspaces and files
-- Debounced file content saves to avoid writing every keystroke
-- 30-day workspace inactivity lifecycle when PostgreSQL is enabled
-- Active collaborator list
-- Current-file awareness
-- Remote text cursor decorations
-- Click a collaborator to jump to their file and cursor line
-- Selected-code AI assistant actions: Explain, Refactor, Fix Bug, Generate Tests, and Optimize
-- AI suggestions are shown for review and never applied automatically
-- Replace Selection uses Monaco edits so undo/redo and existing Socket.io sync continue to work
-- Run Code support for JavaScript, TypeScript, and Python
-- Standard input and local-only output panel
-- Stop button for cancelling a local execution request
-- Connection status: connecting, connected, disconnected, reconnecting, reconnection failed
-- Session sync status: synced, syncing, unsynced changes, connection lost
-- Structured Socket.io error feedback for invalid file operations
+- Persistent workspace and file storage in PostgreSQL
+- User-facing workspace names with inline rename support
+- Browser-local recent workspace history
+- Anonymous temporary collaborator names and colors
+- Active collaborator list with current-file awareness
+- Remote Monaco cursor decorations
+- Click a collaborator to jump to their file and cursor
+- Explicit Leave Workspace flow
+- Light/dark theme support
+- Resizable Input / Output / Terminal lower panel
+- Code execution for JavaScript, TypeScript, and Python
+- Browser-local terminal interface for supported commands
+- Selected-code AI assistant actions:
+  - Explain
+  - Refactor
+  - Fix Bug
+  - Generate Tests
+  - Optimize
+- AI responses are reviewed before code replacement
+- Rate limiting for AI and code execution
+- PostgreSQL-backed monthly Judge0 execution cap
+- Automated frontend and backend tests
 
 ## Architecture
 
 ```text
+frontend/                 backend/                      PostgreSQL
+Next.js + Monaco          Express + Socket.io            durable workspaces
+      |                         |                         durable files
+      | Socket.io rooms         |                         execution usage cap
+      v                         v
+Collaborative UI  <---->  WorkspaceService
+                              |
+                              v
+                        In-memory workspace cache
+                        In-memory collaborators/cursors
+```
+
+The app is split into three npm workspaces:
+
+- `frontend`: Next.js UI, Monaco Editor, Socket.io client, AI/execution panels
+- `backend`: Express API, Socket.io server, workspace service, PostgreSQL persistence
+- `shared`: TypeScript Socket.io event contracts shared by frontend and backend
+
+### Repository Layout
+
+```text
 shared/
-  src/
-    socketEvents.ts
+  src/socketEvents.ts
 
 frontend/
   app/
     components/
-      CodeEditor.tsx
-      CollaboratorList.tsx
-      ConnectionStatus.tsx
-      DeleteFileDialog.tsx
-      FileDialog.tsx
-      FileSidebar.tsx
-      AiActionToolbar.tsx
-      AiAssistantPanel.tsx
-      AiResultView.tsx
-      WorkspaceLanding.tsx
-      WorkspacePage.tsx
-    hooks/
-      useCollaborativeWorkspace.ts
-    workspace/
-      [workspaceId]/
-        page.tsx
-    page.tsx
-    types.ts
+    hooks/useCollaborativeWorkspace.ts
+    workspace/[workspaceId]/page.tsx
     workspaceRouter.ts
+    backendUrl.ts
 
 backend/
   src/
-    services/
-      debouncedPersistence.ts
-      workspaceService.ts
     ai/
-      aiPrompts.ts
-      aiRouter.ts
-      aiService.ts
-      aiTypes.ts
-      aiValidation.ts
-      azureAiClient.ts
     execution/
-      executionProvider.ts
-      executionRouter.ts
-      executionService.ts
-      executionTypes.ts
-      executionValidation.ts
-      languageRegistry.ts
-      pistonExecutionProvider.ts
+    services/
     validation/
-      socketValidation.ts
-    app.ts
-    collaboratorState.ts
-    config.ts
-    index.ts
     database.ts
-    logger.ts
     server.ts
     socketHandlers.ts
     workspaceState.ts
 ```
 
-The app is split into three npm workspaces:
+## Real-Time Collaboration
 
-- `frontend`: Next.js UI, Monaco Editor, and the collaborative workspace hook
-- `backend`: Express, Socket.io, in-memory workspace/collaborator state, and PostgreSQL persistence
-- `shared`: TypeScript contracts for Socket.io events and payloads used by both frontend and backend
+Each workspace URL maps to one Socket.io room. Users opening the same URL join the same room and receive the latest in-memory workspace state.
 
-The backend keeps active workspace state in memory for fast Socket.io updates. PostgreSQL sits underneath that memory cache and only handles persistence. Collaborator presence and cursor positions are intentionally in memory only and do not persist across restarts.
+Important events include:
 
-Durable state:
+- `join-workspace`
+- `workspace-state`
+- `rename-workspace`
+- `workspace-renamed`
+- `create-file`
+- `file-created`
+- `rename-file`
+- `file-renamed`
+- `delete-file`
+- `file-deleted`
+- `code-change`
+- `file-selected`
+- `cursor-change`
+- `collaborators-state`
 
-```text
-PostgreSQL -> workspaces + files
-```
+Edits are broadcast immediately to other users in the same workspace. New tabs receive the current workspace state on join. Concurrent editing currently uses last-write-wins behavior rather than CRDT or operational transform.
 
-Ephemeral state:
+## Persistence Model
 
-```text
-Memory -> collaborators + cursors + current-file awareness
-```
+PostgreSQL stores durable workspace data:
 
-Backend responsibilities:
+- workspace ID
+- workspace display name
+- files
+- file names
+- languages
+- contents
+- timestamps
+- monthly execution usage
 
-- `app.ts`: Express app and `/health`
-- `server.ts`: HTTP server, Socket.io server, database startup, and graceful shutdown
-- `socketHandlers.ts`: Socket.io event flow and room broadcasting
-- `workspaceService.ts`: workspace/file state operations and debounced persistence calls
-- `debouncedPersistence.ts`: delayed content saves so only the latest code is persisted after a short pause
-- `database.ts`: PostgreSQL migration, workspace/file loading, saving, renaming, content updates, deletion, and connection cleanup
-- `socketValidation.ts`: runtime validation for incoming socket payloads
-- `ai/`: Azure OpenAI client setup, prompt construction, validation, service orchestration, and `/api/ai/assist`
-- `execution/`: code execution validation, provider abstraction, Piston/Judge0 integrations, execution orchestration, and `/api/execution/run`
+Memory stores live collaboration data:
 
-Frontend responsibilities:
+- active workspace cache
+- connected collaborators
+- temporary user names/colors
+- current file per collaborator
+- cursor positions
 
-- `page.tsx`: landing page for creating or joining workspaces
-- `workspace/[workspaceId]/page.tsx`: dynamic workspace route
-- `workspaceRouter.ts`: workspace ID generation, validation, parsing, and URL creation
-- `WorkspaceLanding.tsx`: create/join UI
-- `WorkspacePage.tsx`: collaborative editor page layout and dialogs
-- `useCollaborativeWorkspace.ts`: Socket.io client lifecycle, editor sync, collaborator state, remote cursors, and jump-to-collaborator behavior
-- `AiAssistantPanel.tsx`: selected-code AI request UI, Markdown result rendering, copy, retry, and explicit replacement
-- `ExecutionPanel.tsx`: Run Code output, standard input, copy, clear, and stop controls
-- `components/`: focused UI pieces for files, collaborators, editor, dialogs, and status
+File content saves are debounced so typing remains real-time over Socket.io without writing every keystroke to PostgreSQL. Pending writes are flushed during graceful shutdown.
+
+Workspaces expire after 30 days of inactivity when PostgreSQL is enabled. Cursor movement and collaborator presence do not update workspace activity because they are ephemeral and high-frequency.
 
 ## AI Assistant Flow
 
 ```text
 Monaco selection
-  -> Next.js client
-  -> Express POST /api/ai/assist
-  -> Azure OpenAI gpt-5-nano deployment
-  -> Result shown for user review
-  -> Optional Replace Selection
-  -> Existing Socket.io synchronization
+  -> Frontend AI panel
+  -> POST /api/ai/assist
+  -> Azure OpenAI deployment
+  -> Markdown response
+  -> Optional explicit Replace Selection
+  -> Existing Socket.io sync
 ```
 
-The browser only sends the selected code, current file name, Monaco language, and limited surrounding context. It does not send the full workspace. The backend reads Azure credentials from environment variables and never returns them to the browser.
+The browser sends only:
+
+- selected code
+- file name
+- Monaco language
+- limited surrounding context
+
+The backend owns all Azure credentials. AI output is rendered as untrusted Markdown with raw HTML disabled. AI-generated code is never inserted automatically; the user must click Replace Selection.
 
 ## Code Execution Flow
 
 ```text
-Active Monaco file
-  -> Next.js client
-  -> Express POST /api/execution/run
-  -> External isolated execution provider
-  -> Normalized result
-  -> Local output panel
+Active file + stdin
+  -> POST /api/execution/run
+  -> execution provider abstraction
+  -> Piston locally or Judge0 in production
+  -> normalized ExecutionResult
+  -> local Output / Terminal panel
 ```
 
-Run Code supports:
+Supported languages:
 
 - JavaScript
 - TypeScript
 - Python
 
-Code execution is intentionally not sent through Socket.io, not broadcast to collaborators, and not persisted. Each user sees only their own run output.
+Execution output is local to the requesting browser tab. It is not broadcast through Socket.io and is not persisted.
+
+Security and cost controls:
+
+- Express does not execute submitted code directly.
+- The backend does not use `eval`, `new Function`, shell commands, or `child_process` for user code.
+- Provider credentials stay backend-only.
+- File names are validated to block path traversal and secret-like files.
+- Source, stdin, output size, and runtime are capped.
+- Execution endpoint is rate limited.
+- Judge0 production execution has a PostgreSQL-backed monthly cap.
 
 ## Terminal
 
-The Terminal tab provides a browser-local command interface for the current
-workspace. It uses the existing isolated execution provider for supported code
-commands and keeps terminal output local to the current browser tab.
+The Terminal tab is a browser-local command interface for the current workspace. It uses the same isolated execution provider as Run Code and does not maintain a persistent shell session.
 
 Supported commands:
 
@@ -193,117 +251,70 @@ Supported commands:
 - `clear`
 - `help`
 
-Commands execute independently in an isolated execution environment. The
-terminal does not currently maintain a persistent shell session, so commands
-such as `cd src` do not change future command working directories. Package
-installation commands such as `npm install react`, Git commands, and environment
-variable inspection are intentionally unavailable in the current terminal model.
+Unsupported by design:
 
-Terminal history is stored only in the current browser session. Terminal input
-and output are not synchronized through Socket.io and are not persisted to
-PostgreSQL.
+- `cd` changing future command context
+- package installation commands
+- Git commands
+- environment variable inspection
 
-## Workspace URLs
+Terminal history is stored only in the current browser session.
 
-The app no longer uses a hardcoded workspace. The landing page creates a unique workspace ID and redirects to:
+## Deployment
+
+| Service | Platform |
+| --- | --- |
+| Frontend | Vercel |
+| Backend | Railway |
+| Database | Neon PostgreSQL |
+
+Production frontend:
 
 ```text
-/workspace/{workspaceId}
+https://collaborative-ide-frontend.vercel.app
 ```
 
-Opening the same URL joins the same Socket.io room, memory workspace cache, and PostgreSQL workspace record. Different workspace URLs remain isolated from each other.
-
-Socket.io events include:
-
-- `join-workspace`
-- `leave-workspace`
-- `workspace-state`
-- `create-file`
-- `file-created`
-- `rename-file`
-- `file-renamed`
-- `delete-file`
-- `file-deleted`
-- `code-change`
-- `file-selected`
-- `cursor-change`
-- `collaborators-state`
-
-## Workspace Lifecycle
-
-Workspaces are persistent anonymous collaboration spaces.
-
-Each workspace:
-
-- has a shareable URL
-- stores files in PostgreSQL when `DATABASE_URL` is configured
-- can be reopened later
-- expires after 30 days of inactivity
-
-Workspace activity includes joining, creating a workspace, creating files, renaming files, deleting files, and persisted content updates. Cursor movement and collaborator presence do not update the database timestamp because they are ephemeral and frequent.
-
-The backend runs expired-workspace cleanup once during startup and then once every 24 hours by default. These defaults can be changed with:
+The frontend must be built with:
 
 ```bash
-WORKSPACE_RETENTION_DAYS="30"
-WORKSPACE_CLEANUP_INTERVAL_HOURS="24"
+NEXT_PUBLIC_BACKEND_URL="https://your-railway-backend-url"
 ```
 
-Expired cleanup deletes only workspaces with `updated_at` older than the retention window and excludes workspaces currently loaded in memory.
+The Railway backend should allow the Vercel frontend origin:
 
-## Anonymous Collaborators
+```bash
+CORS_ORIGIN="https://collaborative-ide-frontend.vercel.app"
+```
 
-Collaborators use temporary names such as `User4837`. Names, colors, cursors, and presence exist only for the current live session. They are never saved to PostgreSQL, so refreshing, reconnecting, or restarting the backend may assign a new temporary name.
+## Local Setup
 
-## Anonymous Workspace History
-
-Recent workspace history is stored only in the user's browser. It is not an account feature and is not synchronized between devices.
-
-The history list:
-
-- keeps up to 10 recent workspaces
-- stores metadata only: workspace ID, display name, last visited time, and optional last file name
-- never stores file contents, source code, cursors, or collaborator names
-- is not saved to PostgreSQL
-- is not synchronized through Socket.io
-
-Removing a workspace from recent history only removes the local browser entry. It does not delete the workspace or affect other collaborators. A workspace itself still expires after 30 days of inactivity, so an expired workspace may remain in local history until the user attempts to reopen it.
-
-## Leave Workspace
-
-`Leave Workspace` opens a confirmation dialog before removing the current browser tab from live presence and navigating back home. It does not delete the workspace, files, recent-history entry, or any other collaborator's state. Closing a browser tab uses the same backend presence cleanup path.
-
-## Prerequisites
+### Prerequisites
 
 - Node.js 20+
 - npm 10+
 
-## Setup
-
-Install dependencies from the repository root:
+### Install
 
 ```bash
 npm install
 ```
 
-## Run Locally
-
-Start the frontend:
+### Run Frontend
 
 ```bash
 npm run dev:frontend
 ```
 
-Start the backend in another terminal:
-
-```bash
-npm run dev:backend
-```
-
-Open:
+Frontend runs at:
 
 ```text
 http://localhost:3000
+```
+
+### Run Backend
+
+```bash
+npm run dev:backend
 ```
 
 Backend health check:
@@ -320,29 +331,45 @@ Expected response:
 }
 ```
 
-AI assistant environment variables, set only for the backend:
+## Environment Variables
+
+Backend variables belong in the backend environment only. Do not prefix secrets with `NEXT_PUBLIC_`.
+
+### Frontend
+
+```bash
+NEXT_PUBLIC_BACKEND_URL="http://localhost:4000"
+```
+
+Use the deployed Railway backend URL in Vercel.
+
+### Backend Core
+
+```bash
+PORT="4000"
+CORS_ORIGIN="http://localhost:3000"
+DATABASE_URL="postgres://USER:PASSWORD@HOST:PORT/DATABASE"
+WORKSPACE_RETENTION_DAYS="30"
+WORKSPACE_CLEANUP_INTERVAL_HOURS="24"
+```
+
+`DATABASE_URL` is optional for local development. Without it, workspace data stays in memory and resets when the backend restarts.
+
+### Azure AI
 
 ```bash
 AZURE_OPENAI_API_KEY="your-api-key"
 AZURE_OPENAI_ENDPOINT="https://your-resource-or-project-endpoint"
 AZURE_OPENAI_DEPLOYMENT="gpt-5-nano"
-```
-
-Do not prefix these with `NEXT_PUBLIC_`.
-
-Optional local AI rate-limit overrides:
-
-```bash
 AI_RATE_LIMIT_MAX="5"
 AI_RATE_LIMIT_WINDOW_MS="600000"
 AI_MAX_CODE_CHARS="2000"
 AI_MAX_CONTEXT_CHARS="1500"
 AI_MAX_OUTPUT_TOKENS="900"
+AI_REASONING_EFFORT="minimal"
 ```
 
-For local testing, you can temporarily increase `AI_RATE_LIMIT_MAX` or lower `AI_RATE_LIMIT_WINDOW_MS`. Restart the backend after changing these values.
-
-Optional code execution environment variables, set only for the backend:
+### Local Piston Execution
 
 ```bash
 CODE_EXECUTION_PROVIDER="piston"
@@ -351,15 +378,9 @@ PISTON_API_KEY=""
 PISTON_JAVASCRIPT_VERSION="18.15.0"
 PISTON_TYPESCRIPT_VERSION="5.0.3"
 PISTON_PYTHON_VERSION="3.10.0"
-EXECUTION_RATE_LIMIT_MAX="20"
-EXECUTION_RATE_LIMIT_WINDOW_MS="3600000"
-EXECUTION_DAILY_RATE_LIMIT_MAX="100"
-EXECUTION_DAILY_RATE_LIMIT_WINDOW_MS="86400000"
 ```
 
-The backend uses an execution provider abstraction. Local development can use Piston, while production can use Judge0 through RapidAPI. Provider secrets are read only by the backend and are never sent to the frontend.
-
-For local Piston development:
+For self-hosted local Piston:
 
 ```bash
 docker run --privileged -v /tmp/piston:/piston -dit -p 2000:2000 --name piston_api ghcr.io/engineer-man/piston
@@ -372,10 +393,9 @@ Then set:
 
 ```bash
 PISTON_API_URL="http://localhost:2000/api/v2"
-PISTON_API_KEY=""
 ```
 
-For production Judge0 on Railway:
+### Production Judge0 Execution
 
 ```bash
 CODE_EXECUTION_PROVIDER="judge0"
@@ -383,23 +403,33 @@ JUDGE0_API_URL="https://judge0-ce.p.rapidapi.com"
 JUDGE0_API_KEY="your-rapidapi-key"
 JUDGE0_API_HOST="judge0-ce.p.rapidapi.com"
 JUDGE0_MONTHLY_EXECUTION_LIMIT="1500"
+EXECUTION_RATE_LIMIT_MAX="20"
+EXECUTION_RATE_LIMIT_WINDOW_MS="3600000"
+EXECUTION_DAILY_RATE_LIMIT_MAX="100"
+EXECUTION_DAILY_RATE_LIMIT_WINDOW_MS="86400000"
 ```
 
-Judge0 usage is capped before provider submission. The monthly counter is stored in PostgreSQL using a `YYYY-MM` key, so it survives backend restarts and naturally resets when a new month begins. The counter is reserved immediately before the Judge0 submission request; if the provider rejects after that point, the app keeps the count conservative and does not retry automatically.
+Judge0 usage is reserved immediately before submission. If the provider rejects after that point, the app keeps the count conservative and does not retry automatically.
 
-## Automated Tests
+## Testing
 
-Run the full automated test suite:
+Run all tests:
 
 ```bash
 npm test
 ```
 
-Run one side at a time:
+Run one side:
 
 ```bash
 npm run test:backend
 npm run test:frontend
+```
+
+Run type checks:
+
+```bash
+npm run typecheck
 ```
 
 Run coverage:
@@ -408,154 +438,103 @@ Run coverage:
 npm run test:coverage
 ```
 
-The current tests cover:
+Test coverage includes:
 
-- Workspace state logic
-- Filename validation
-- Language detection
-- Collaborator presence state
-- Express `/health`
+- workspace state logic
+- workspace rename validation and broadcast behavior
+- filename validation
+- language detection
+- collaborator presence state
+- Express health route
 - Socket.io collaboration flows
-- File sidebar behavior
-- File dialog and delete confirmation behavior
-- Leave Workspace confirmation behavior
-- Browser-local recent workspace history behavior
-- Landing page recent workspace rendering and local removal
-- Collaborator list rendering and click handling
-- AI route validation, provider failure handling, empty responses, mocked provider calls, and rate limiting
-- AI panel no-selection, loading, error, copy, explicit replacement, and disabled-action states
-- Code execution validation, safe filename checks, language support, provider failures, output truncation, and rate limiting
-- Run Code panel loading, stdout/stderr rendering, stdin, stop, copy, clear, button run, and keyboard run behavior
-- Anonymous collaborator names, explicit workspace leave, missing-workspace handling, and workspace lifecycle service behavior
+- file sidebar, file dialog, and delete confirmation behavior
+- recent workspace history
+- AI route validation, rate limiting, and provider failure handling
+- AI panel loading/error/limit/replacement states
+- execution validation, output truncation, provider failure, and rate limiting
+- Piston and Judge0 execution provider behavior
+- lower panel, terminal, and execution UI behavior
 
-## Multi-Tab Test
+## Manual Verification
 
-1. Open `http://localhost:3000`.
+### Multi-User Collaboration
+
+1. Open the live demo or local frontend.
 2. Create a workspace.
 3. Copy the workspace URL with Share.
-4. Open the same URL in Tab B and Tab C.
-5. Confirm all collaborators appear.
+4. Open the same URL in another browser tab.
+5. Confirm collaborators appear in both tabs.
 6. Create, rename, delete, and switch files.
 7. Confirm edits synchronize only between tabs on the same workspace URL.
-8. Open a different workspace URL and confirm it is isolated.
-9. Refresh a workspace tab and confirm files and editor contents reload.
-10. Move the text caret in one tab and confirm remote cursors appear only for users viewing the same file.
-11. Click another collaborator to jump to their current file and cursor.
-12. Click Leave Workspace in one tab and confirm that collaborator disappears while files remain.
-13. Close one tab and confirm that collaborator disappears.
-14. Stop the backend and confirm disconnected status appears.
-15. Restart the backend and confirm the frontend reconnects cleanly.
+8. Move the text caret and confirm remote cursor decorations appear.
+9. Click a collaborator and confirm the editor jumps to their file and cursor.
+10. Click Leave Workspace and confirm only live presence is removed.
 
-## Current Policies
-
-- A workspace must always contain at least one file, so deleting the final file is blocked.
-- While disconnected, Monaco is read-only and edits are paused instead of stored offline.
-- Workspace IDs must be 3-64 characters and use letters, numbers, hyphens, or underscores.
-- Direct unknown workspace URLs are not silently created when PostgreSQL persistence is enabled.
-- On reconnect, the backend session state for the current workspace URL is treated as authoritative.
-- Deleted files are removed by stable `fileId`; stale updates for deleted files are rejected.
-- AI requests are limited to 5 requests per IP every 10 minutes by default.
-- AI selected code is limited to 2,000 characters by default.
-- AI surrounding context is trimmed to 1,500 characters by default.
-- AI responses are capped at 900 output tokens by default.
-- AI output is rendered as untrusted Markdown with raw HTML disabled.
-- AI-generated code is never executed or inserted automatically.
-- Code execution is limited to 20 runs per IP per hour and 100 runs per IP per day by default.
-- Judge0 production execution is capped at 1,500 global submissions per calendar month.
-- Judge0 monthly usage is stored in PostgreSQL and resets naturally by month key.
-
-## AI Manual Test
-
-1. Select code in Monaco.
-2. Click `Ask AI`.
-3. Run Explain and confirm an explanation appears.
-4. Run Refactor, Fix Bug, Generate Tests, and Optimize.
-5. Confirm generated code is not inserted automatically.
-6. Click Replace Selection for a replacement response.
-7. Confirm only the selected range changes.
-8. Use undo and confirm the original code returns.
-9. Open the same workspace in another tab and confirm the AI-applied edit syncs through Socket.io.
-10. Refresh and confirm the edit persists through the existing workspace persistence flow.
-11. Try Ask AI with no selection and confirm the helpful warning appears.
-12. Send repeated requests and confirm rate limiting eventually returns a friendly error.
-
-## Code Execution Manual Test
-
-1. Open a workspace.
-2. Select or create a JavaScript, TypeScript, or Python file.
-3. Click `Run Code` or press `Ctrl+Enter` / `Cmd+Enter`.
-4. Confirm the output panel shows `Running...` and then the result.
-5. Add standard input in the `Input` tab and run again.
-6. Open the same workspace in another browser tab and confirm the run output appears only in the tab that ran the code.
-7. Try running an unsupported file type and confirm a friendly error appears.
-
-## Optional PostgreSQL
-
-The project can run without PostgreSQL. If `DATABASE_URL` is not set, workspace data stays in memory and resets when the backend restarts.
-
-To persist workspaces and files across backend restarts, create a database and set:
-
-```bash
-export DATABASE_URL="postgres://USER:PASSWORD@localhost:5432/collaborative_ide"
-```
-
-The backend creates the required tables automatically. The schema is also available at:
-
-```text
-backend/schema.sql
-```
-
-With PostgreSQL enabled:
-
-- the backend runs `migrateDatabase()` before accepting requests
-- the first user joining a workspace loads files from PostgreSQL if they exist
-- missing workspaces are created only through the landing page's Create Workspace flow
-- unknown or expired workspace URLs show a friendly not-found/expired state
-- every workspace URL has independent files and database records
-- file creation, rename, deletion, and content updates are persisted
-- content updates are debounced, so typing still syncs instantly over Socket.io without writing every keystroke
-- pending content writes are flushed during graceful shutdown
-- workspace cleanup removes PostgreSQL workspaces after 30 days of inactivity
-
-## Persistence Test
+### Persistence
 
 1. Set `DATABASE_URL`.
-2. Start the backend and frontend.
-3. Create a workspace from the landing page.
-4. Add different content to each file.
-5. Stop and restart the backend.
-6. Reopen or refresh the same `/workspace/{workspaceId}` URL.
-7. Confirm files, names, languages, and contents are restored.
-8. Confirm collaborators and cursors reset after restart.
+2. Create a workspace.
+3. Rename the workspace.
+4. Add or rename files.
+5. Edit file contents.
+6. Wait for persistence or stop the backend gracefully.
+7. Restart the backend.
+8. Reopen the same `/workspace/{workspaceId}` URL.
+9. Confirm workspace name, files, languages, and contents are restored.
+10. Confirm collaborators and cursors reset after restart.
 
-## Known Limitations
+### AI
 
-- No authentication or permissions
-- No deployment configuration yet
-- No CRDT or operational transform
-- Concurrent edits use simple last-write-wins behavior
-- Collaborator presence and cursor positions reset on backend restart
-- PostgreSQL persistence still needs fuller production-style testing and deployment hardening
-- AI requests are stateless and not persisted
-- AI can only work on the current Monaco selection
-- Code execution depends on a configured external execution provider
-- Code execution is limited to JavaScript, TypeScript, and Python
-- Run output is local to the requesting browser tab
+1. Select code in Monaco.
+2. Open Ask AI.
+3. Run Explain, Refactor, Fix Bug, Generate Tests, or Optimize.
+4. Confirm the result is shown for review.
+5. Confirm code is not inserted automatically.
+6. Click Replace Selection for a replacement response.
+7. Confirm the edit syncs through normal Socket.io code-change flow.
 
-## Code Execution Safety Notes
+### Code Execution
 
-- The Express server does not execute submitted code directly.
-- The backend does not use `eval`, `new Function`, shell commands, or `child_process` for user code.
-- Provider credentials and URLs stay on the backend.
-- Submitted filenames are validated to block path traversal and secret-like files.
+1. Open a JavaScript, TypeScript, or Python file.
+2. Click Run Code or press `Ctrl+Enter` / `Cmd+Enter`.
+3. Confirm Output shows the result.
+4. Add standard input in the Input tab and run again.
+5. Open the same workspace in another tab and confirm output remains local.
+6. Try an unsupported file type and confirm a friendly error appears.
+
+## Current Policies And Tradeoffs
+
+- No authentication or permissions yet.
+- Workspace IDs are permanent identifiers; workspace names are display-only.
+- Unknown persisted workspace URLs show a friendly not-found/expired state.
+- A workspace must always contain at least one file.
+- Disconnected editing is paused instead of stored offline.
+- Concurrent editing uses last-write-wins, not CRDT or operational transform.
+- Presence, cursors, terminal history, and execution output are ephemeral.
+- Recent workspace history is browser-local and stores metadata only.
+- AI requests are stateless and not persisted.
+- AI can only operate on the current Monaco selection.
+- Code execution is limited to JavaScript, TypeScript, and Python.
+- Run output is local to the requesting browser tab.
+
+## Security Notes
+
+- AI keys, database credentials, and execution-provider secrets stay backend-only.
+- Raw provider errors and secrets are not returned to the frontend.
+- AI Markdown is rendered with raw HTML disabled.
+- AI replacement requires explicit user action.
+- Submitted execution filenames are validated.
 - Execution requests are rate limited.
-- Source, stdin, runtime, and output sizes are capped.
-- Runtime is capped at 3 seconds to match local Piston's default limit.
-- Results are rendered as plain text in the frontend output panel.
+- Judge0 usage is capped globally per calendar month in PostgreSQL.
+- Collaborator identity is temporary and anonymous.
 
 ## Future Work
 
-- Add deployment configuration
-- Add user authentication
-- Add permissions or workspace sharing
-- Add stronger conflict handling for simultaneous edits
+- Authentication and user-owned workspaces
+- Workspace permissions and invite controls
+- Stronger conflict handling with CRDT or operational transform
+- Folder tree support
+- More complete multi-file execution support
+- Persistent terminal sessions
+- Richer collaborator awareness
+- Production observability and admin tooling
