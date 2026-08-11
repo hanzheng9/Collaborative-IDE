@@ -6,6 +6,14 @@ A full-stack real-time collaborative code editor inspired by Google Docs for cod
 
 ## Demo
 
+### Collaboration Demo
+
+![Split-screen demo showing real-time collaboration between workspace users.](docs/screenshots/demo-short.gif)
+
+### Remote Cursor Tracking
+
+![Split-screen demo showing remote Monaco cursor tracking between collaborators.](docs/screenshots/remote-cursor-tracking.gif)
+
 ### Landing Page
 
 ![Collaborative IDE landing page with Create Workspace and Join Existing Workspace controls.](docs/screenshots/landing-page.png)
@@ -29,15 +37,6 @@ A full-stack real-time collaborative code editor inspired by Google Docs for cod
 ### AI Assistant
 
 ![Collaborative IDE AI assistant panel showing selected-code bug fix output and a Replace Selection review action.](docs/screenshots/ai-assistant.png)
-
-### Short Demo GIF
-
-<!--
-Add a 10-15 second GIF:
-docs/screenshots/demo-short.gif
-Suggested flow: create or open a workspace, type in Monaco, show another tab
-receiving the update, and briefly show the collaborator cursor.
--->
 
 ### Full Demo Video
 

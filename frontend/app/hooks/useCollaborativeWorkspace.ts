@@ -146,8 +146,9 @@ export function useCollaborativeWorkspace(workspaceId: string) {
 
   const applyEditorContent = (code: string) => {
     const editor = editorRef.current;
+    const model = editor?.getModel();
 
-    if (!editor || editor.getValue() === code) {
+    if (!editor || !model || editor.getValue() === code) {
       return;
     }
 
@@ -156,7 +157,16 @@ export function useCollaborativeWorkspace(workspaceId: string) {
 
     try {
       applyingRemoteChangeRef.current = true;
-      editor.setValue(code);
+      model.pushEditOperations(
+        [],
+        [
+          {
+            range: model.getFullModelRange(),
+            text: code
+          }
+        ],
+        () => null
+      );
 
       if (viewState) {
         editor.restoreViewState(viewState);
