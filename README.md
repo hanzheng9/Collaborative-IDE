@@ -8,7 +8,7 @@ A full-stack real-time collaborative code editor inspired by Google Docs for cod
 
 ### Collaboration Demo
 
-![Split-screen demo showing real-time collaboration between workspace users.](docs/screenshots/demo-short.gif)
+![Split-screen demo showing real-time collaboration between workspace users.](docs/screenshots/collaboration-demo-short.gif)
 
 ### Remote Cursor Tracking
 

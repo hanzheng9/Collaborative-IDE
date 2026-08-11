@@ -160,6 +160,9 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
   const [isTerminalInfoOpen, setIsTerminalInfoOpen] = useState(false);
   const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState(workspaceName);
+  const localCollaborator =
+    collaborators.find((collaborator) => collaborator.userId === localUserId) ??
+    null;
 
   const finishWorkspaceNameEdit = useCallback(() => {
     const nextName = workspaceNameDraft.trim() || "Untitled Workspace";
@@ -620,17 +623,16 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
             <Tag size="sm" type={syncStatus === "synced" ? "blue" : "warm-gray"}>
               {syncStatus}
             </Tag>
-            <div className="avatarStack" aria-label={`${collaborators.length} collaborators`}>
-              {collaborators.slice(0, 4).map((collaborator) => (
+            <div className="avatarStack" aria-label="Current user">
+              {localCollaborator ? (
                 <span
                   className="avatarDot"
-                  key={collaborator.userId}
-                  title={collaborator.displayName}
-                  style={{ backgroundColor: collaborator.color }}
+                  title={localCollaborator.displayName}
+                  style={{ backgroundColor: localCollaborator.color }}
                 >
-                  {collaborator.displayName}
+                  {localCollaborator.displayName}
                 </span>
-              ))}
+              ) : null}
             </div>
           </div>
           <div className="topbarActions">
