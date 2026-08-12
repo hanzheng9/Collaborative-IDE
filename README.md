@@ -10,9 +10,13 @@ A full-stack real-time collaborative code editor inspired by Google Docs for cod
 
 ![Split-screen demo showing real-time collaboration between workspace users.](docs/screenshots/collaboration-demo-short.gif)
 
+Two users edit the same workspace in split screen. Code changes and newly created files sync live through Socket.io.
+
 ### Remote Cursor Tracking
 
 ![Split-screen demo showing remote Monaco cursor tracking between collaborators.](docs/screenshots/remote-cursor-tracking.gif)
+
+Remote cursor decorations show where collaborators are editing. Clicking a collaborator jumps to their cursor, including when they are viewing a different file.
 
 ### Landing Page
 
@@ -82,7 +86,7 @@ The project intentionally separates live collaboration state from durable storag
 - Anonymous collaborative workspaces
 - Real-time multi-user code synchronization
 - Multi-file workspace model
-- Create, rename, delete, and switch files
+- Create, rename, delete, and switch files with real-time synchronization
 - Persistent workspace and file storage in PostgreSQL
 - User-facing workspace names with inline rename support
 - Browser-local recent workspace history
