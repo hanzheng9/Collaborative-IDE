@@ -2,7 +2,7 @@
 
 A full-stack real-time collaborative code editor inspired by Google Docs for code. Collaborative IDE supports shareable multi-file workspaces, live multi-user editing, persistent workspace storage, sandboxed code execution, and selected-code AI assistance.
 
-[Live Demo](https://collaborative-ide-frontend.vercel.app)
+[Deployed App](https://collaborative-ide-frontend.vercel.app)
 
 ## Demo
 
