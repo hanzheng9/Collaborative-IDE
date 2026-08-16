@@ -17,6 +17,7 @@ import {
   touchWorkspace
 } from "./database.js";
 import { ExecutionService } from "./execution/executionService.js";
+import { AiService } from "./ai/aiService.js";
 import { logger } from "./logger.js";
 import { WorkspaceService, type WorkspacePersistence } from "./services/workspaceService.js";
 import { registerSocketHandlers } from "./socketHandlers.js";
@@ -51,7 +52,26 @@ export async function startServer() {
   };
   const workspaceService = new WorkspaceService({ persistence });
   const executionService = new ExecutionService({ workspaceService });
-  const app = createApp({ executionService });
+  const aiService = new AiService();
+
+  let persistenceAvailable = isDatabaseConfigured();
+
+  const app = createApp({
+    aiService,
+    corsOrigin: config.corsOrigin,
+    executionService,
+    getHealthServices: () => ({
+      ai: aiService.isConfigured() ? "configured" : "not_configured",
+      database: persistenceAvailable
+        ? "configured"
+        : isDatabaseConfigured()
+          ? "unavailable"
+          : "not_configured",
+      execution: executionService.isConfigured()
+        ? "configured"
+        : "not_configured"
+    })
+  });
   const server = createServer(app);
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
     cors: {
@@ -59,8 +79,6 @@ export async function startServer() {
       methods: ["GET", "POST"]
     }
   });
-
-  let persistenceAvailable = isDatabaseConfigured();
 
   try {
     await migrateDatabase();

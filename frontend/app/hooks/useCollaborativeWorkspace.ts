@@ -4,6 +4,7 @@ import { loader, type OnChange, type OnMount } from "@monaco-editor/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { BACKEND_URL } from "../backendUrl";
+import { configureMonacoWorkers } from "../monacoWorkers";
 import type {
   AppErrorPayload,
   ClientToServerEvents,
@@ -430,6 +431,7 @@ export function useCollaborativeWorkspace(workspaceId: string) {
     let isMounted = true;
 
     import("monaco-editor").then((monaco) => {
+      configureMonacoWorkers();
       loader.config({ monaco });
 
       if (isMounted) {

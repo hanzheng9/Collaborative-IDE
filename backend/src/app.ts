@@ -9,17 +9,28 @@ type CreateAppOptions = {
   aiRateLimitMax?: number;
   aiRateLimitWindowMs?: number;
   aiService?: AiService;
+  corsOrigin?: string;
   executionDailyRateLimitMax?: number;
   executionDailyRateLimitWindowMs?: number;
   executionRateLimitMax?: number;
   executionRateLimitWindowMs?: number;
   executionService?: ExecutionService;
+  getHealthServices?: () => HealthServices;
+};
+
+type ServiceStatus = "configured" | "not_configured" | "unavailable";
+
+type HealthServices = {
+  ai: ServiceStatus;
+  database: ServiceStatus;
+  execution: ServiceStatus;
 };
 
 export function createApp(options: CreateAppOptions = {}) {
   const app = express();
+  const corsOrigin = options.corsOrigin ?? "http://localhost:3000";
 
-  app.use(cors());
+  app.use(cors({ origin: corsOrigin }));
   app.use(express.json());
   app.use(malformedJsonHandler);
   app.use(
@@ -44,7 +55,16 @@ export function createApp(options: CreateAppOptions = {}) {
   }
 
   app.get("/health", (_request, response) => {
-    response.json({ status: "ok" });
+    response.json({
+      services: options.getHealthServices?.() ?? {
+        ai: options.aiService?.isConfigured() ? "configured" : "not_configured",
+        database: "not_configured",
+        execution: options.executionService?.isConfigured()
+          ? "configured"
+          : "not_configured"
+      },
+      status: "ok"
+    });
   });
 
   return app;

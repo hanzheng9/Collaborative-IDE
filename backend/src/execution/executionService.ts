@@ -22,7 +22,7 @@ type ExecutionServiceOptions = {
 
 function createDefaultProvider() {
   const provider = process.env.CODE_EXECUTION_PROVIDER ?? "piston";
-  const configuredMonthlyLimit = Number(process.env.JUDGE0_MONTHLY_EXECUTION_LIMIT);
+  const configuredMonthlyLimit = Number(process.env.EXECUTION_MONTHLY_LIMIT);
   const monthlyLimit =
     Number.isFinite(configuredMonthlyLimit) && configuredMonthlyLimit > 0
       ? configuredMonthlyLimit

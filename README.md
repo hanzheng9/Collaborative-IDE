@@ -346,6 +346,11 @@ Expected response:
 
 ```json
 {
+  "services": {
+    "ai": "configured",
+    "database": "configured",
+    "execution": "configured"
+  },
   "status": "ok"
 }
 ```
@@ -421,7 +426,7 @@ CODE_EXECUTION_PROVIDER="judge0"
 JUDGE0_API_URL="https://judge0-ce.p.rapidapi.com"
 JUDGE0_API_KEY="your-rapidapi-key"
 JUDGE0_API_HOST="judge0-ce.p.rapidapi.com"
-JUDGE0_MONTHLY_EXECUTION_LIMIT="1500"
+EXECUTION_MONTHLY_LIMIT="1500"
 EXECUTION_RATE_LIMIT_MAX="20"
 EXECUTION_RATE_LIMIT_WINDOW_MS="3600000"
 EXECUTION_DAILY_RATE_LIMIT_MAX="100"
