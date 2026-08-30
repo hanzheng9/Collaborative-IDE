@@ -15,6 +15,17 @@ export type PersistedWorkspace = {
   files: PersistedFile[];
 };
 
+export type PersistedFileVersion = {
+  id: string;
+  fileId: string;
+  name: string | null;
+  createdAt: string;
+};
+
+export type PersistedFileVersionContent = PersistedFileVersion & {
+  content: string;
+};
+
 export type DeleteExpiredWorkspacesOptions = {
   excludeWorkspaceIds?: string[];
   retentionDays?: number;
@@ -101,6 +112,25 @@ export async function migrateDatabase() {
         ALTER TABLE files ADD CONSTRAINT files_pkey PRIMARY KEY (workspace_id, id);
       END IF;
     END $$;
+
+    CREATE TABLE IF NOT EXISTS file_versions (
+      id BIGSERIAL PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      file_id TEXT NOT NULL,
+      name TEXT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT file_versions_file_fk
+        FOREIGN KEY (workspace_id, file_id)
+        REFERENCES files(workspace_id, id)
+        ON DELETE CASCADE
+    );
+
+    ALTER TABLE file_versions
+      ADD COLUMN IF NOT EXISTS name TEXT NULL;
+
+    CREATE INDEX IF NOT EXISTS file_versions_file_created_at_idx
+      ON file_versions(workspace_id, file_id, created_at DESC);
   `);
 
   logger.info("PostgreSQL persistence enabled");
@@ -299,6 +329,157 @@ export async function saveFileContent(
   );
 
   await updateWorkspaceTimestamp(workspaceId);
+}
+
+export async function createFileVersion(
+  workspaceId: string,
+  fileId: string,
+  content: string,
+  name: string | null = null,
+  client: PgPool | PoolClient | null = pool
+) {
+  if (!client) {
+    return null;
+  }
+
+  const result = await client.query<{
+    id: string;
+    file_id: string;
+    name: string | null;
+    created_at: Date;
+  }>(
+    `
+      INSERT INTO file_versions (workspace_id, file_id, name, content)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, file_id, name, created_at
+    `,
+    [workspaceId, fileId, name, content]
+  );
+
+  await pruneFileVersions(workspaceId, fileId, client);
+
+  const version = result.rows[0];
+
+  return {
+    id: String(version.id),
+    fileId: version.file_id,
+    name: version.name,
+    createdAt: version.created_at.toISOString()
+  } satisfies PersistedFileVersion;
+}
+
+export async function pruneFileVersions(
+  workspaceId: string,
+  fileId: string,
+  client: PgPool | PoolClient | null = pool
+) {
+  if (!client) {
+    return;
+  }
+
+  await client.query(
+    `
+      DELETE FROM file_versions
+      WHERE workspace_id = $1
+        AND file_id = $2
+        AND id NOT IN (
+          SELECT id
+          FROM file_versions
+          WHERE workspace_id = $1 AND file_id = $2
+          ORDER BY created_at DESC, id DESC
+          LIMIT 50
+        )
+    `,
+    [workspaceId, fileId]
+  );
+}
+
+export async function getFileVersions(workspaceId: string, fileId: string) {
+  if (!pool) {
+    return [];
+  }
+
+  const result = await pool.query<{
+    id: string;
+    file_id: string;
+    name: string | null;
+    created_at: Date;
+  }>(
+    `
+      SELECT id, file_id, name, created_at
+      FROM file_versions
+      WHERE workspace_id = $1 AND file_id = $2
+      ORDER BY created_at DESC, id DESC
+      LIMIT 50
+    `,
+    [workspaceId, fileId]
+  );
+
+  return result.rows.map((version) => ({
+    id: String(version.id),
+    fileId: version.file_id,
+    name: version.name,
+    createdAt: version.created_at.toISOString()
+  })) satisfies PersistedFileVersion[];
+}
+
+export async function getFileVersion(
+  workspaceId: string,
+  fileId: string,
+  versionId: string
+) {
+  if (!pool) {
+    return null;
+  }
+
+  const result = await pool.query<{
+    id: string;
+    file_id: string;
+    name: string | null;
+    content: string;
+    created_at: Date;
+  }>(
+    `
+      SELECT id, file_id, name, content, created_at
+      FROM file_versions
+      WHERE workspace_id = $1 AND file_id = $2 AND id = $3
+    `,
+    [workspaceId, fileId, versionId]
+  );
+
+  const version = result.rows[0];
+
+  if (!version) {
+    return null;
+  }
+
+  return {
+    id: String(version.id),
+    fileId: version.file_id,
+    name: version.name,
+    createdAt: version.created_at.toISOString(),
+    content: version.content
+  } satisfies PersistedFileVersionContent;
+}
+
+export async function deleteFileVersion(
+  workspaceId: string,
+  fileId: string,
+  versionId: string
+) {
+  if (!pool) {
+    return false;
+  }
+
+  const result = await pool.query(
+    `
+      DELETE FROM file_versions
+      WHERE workspace_id = $1 AND file_id = $2 AND id = $3
+    `,
+    [workspaceId, fileId, versionId]
+  );
+
+  return (result.rowCount ?? 0) > 0;
 }
 
 export async function deleteFile(workspaceId: string, fileId: string) {

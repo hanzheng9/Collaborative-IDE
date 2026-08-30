@@ -36,6 +36,12 @@ vi.mock("./CodeEditor", () => ({
   )
 }));
 
+vi.mock("./FileVersionHistoryPanel", () => ({
+  FileVersionHistoryPanel: () => (
+    <aside aria-label="File version history">Version History</aside>
+  )
+}));
+
 const file = {
   content: "console.log('hello');",
   fileId: "main.js",
@@ -143,6 +149,17 @@ describe("WorkspacePage execution", () => {
 
     expect(screen.getByText(/select a file before running code/i)).toBeInTheDocument();
     expect(runCode).not.toHaveBeenCalled();
+  });
+
+  it("opens file version history for the selected file", async () => {
+    mockWorkspace();
+
+    render(<WorkspacePage workspaceId="workspace-1" />);
+    await userEvent.click(screen.getByRole("button", { name: /history/i }));
+
+    expect(
+      screen.getByRole("complementary", { name: /file version history/i })
+    ).toBeInTheDocument();
   });
 
   it("shows the lower panel expanded by default", () => {

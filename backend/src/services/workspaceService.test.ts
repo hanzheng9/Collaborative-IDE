@@ -69,6 +69,7 @@ describe("WorkspaceService lifecycle", () => {
   it("tracks activity for file creation, rename, delete, and debounced content save", async () => {
     vi.useFakeTimers();
     const persistence: WorkspacePersistence = {
+      createFileVersion: vi.fn().mockResolvedValue(undefined),
       deleteFile: vi.fn().mockResolvedValue(undefined),
       saveFile: vi.fn().mockResolvedValue(undefined),
       saveFileContent: vi.fn().mockResolvedValue(undefined),
@@ -111,6 +112,7 @@ describe("WorkspaceService lifecycle", () => {
       created.file.fileId,
       "console.log('latest');"
     );
+    expect(persistence.createFileVersion).not.toHaveBeenCalled();
 
     service.deleteFile({
       workspaceId: "demo",
@@ -165,6 +167,71 @@ describe("WorkspaceService lifecycle", () => {
       ok: false,
       code: "INVALID_WORKSPACE_NAME"
     });
+  });
+
+  it("restores file content through memory and persistence", async () => {
+    const createFileVersion = vi.fn().mockResolvedValue(undefined);
+    const saveFileContent = vi.fn().mockResolvedValue(undefined);
+    const service = new WorkspaceService({
+      persistence: {
+        createFileVersion,
+        saveFileContent
+      }
+    });
+    await service.loadWorkspace("demo", { createIfMissing: true });
+    service.updateFileContent({
+      workspaceId: "demo",
+      fileId: "main.ts",
+      code: "const current = true;"
+    });
+
+    const result = await service.restoreFileContent({
+      workspaceId: "demo",
+      fileId: "main.ts",
+      code: "const restored = true;"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      file: {
+        content: "const restored = true;"
+      }
+    });
+    expect(createFileVersion).toHaveBeenCalledWith(
+      "demo",
+      "main.ts",
+      "const current = true;",
+      "Before restore"
+    );
+    expect(saveFileContent).toHaveBeenCalledWith(
+      "demo",
+      "main.ts",
+      "const restored = true;"
+    );
+    expect(service.getWorkspaceState("demo").files[0].content).toBe(
+      "const restored = true;"
+    );
+  });
+
+  it("does not preserve a before-restore version when content is unchanged", async () => {
+    const createFileVersion = vi.fn().mockResolvedValue(undefined);
+    const saveFileContent = vi.fn().mockResolvedValue(undefined);
+    const service = new WorkspaceService({
+      persistence: {
+        createFileVersion,
+        saveFileContent
+      }
+    });
+    await service.loadWorkspace("demo", { createIfMissing: true });
+
+    await service.restoreFileContent({
+      workspaceId: "demo",
+      fileId: "main.ts",
+      code: service.getWorkspaceState("demo").files[0].content
+    });
+
+    expect(createFileVersion).not.toHaveBeenCalled();
+    expect(saveFileContent).toHaveBeenCalled();
   });
 
   it("does not persist cursor-only activity", async () => {

@@ -33,6 +33,12 @@ export type WorkspacePersistence = {
     language: string
   ) => Promise<void>;
   renameWorkspace?: (workspaceId: string, name: string) => Promise<void>;
+  createFileVersion?: (
+    workspaceId: string,
+    fileId: string,
+    content: string,
+    name: string | null
+  ) => Promise<unknown>;
   saveFileContent?: (
     workspaceId: string,
     fileId: string,
@@ -266,6 +272,119 @@ export class WorkspaceService {
     }
 
     return result;
+  }
+
+  async restoreFileContent(payload: CodeChangePayload) {
+    const currentFile = this.workspaces
+      .getWorkspaceFiles(payload.workspaceId)
+      .get(payload.fileId);
+
+    if (!currentFile) {
+      return {
+        ok: false as const,
+        code: "FILE_NOT_FOUND" as const,
+        error: "The selected file no longer exists."
+      };
+    }
+
+    if (currentFile.content !== payload.code) {
+      try {
+        await this.persistence.createFileVersion?.(
+          payload.workspaceId,
+          payload.fileId,
+          currentFile.content,
+          "Before restore"
+        );
+      } catch (error) {
+        logger.error("failed to preserve pre-restore file version", {
+          fileId: payload.fileId,
+          workspaceId: payload.workspaceId
+        });
+      }
+    }
+
+    const result = this.workspaces.updateFileContent(payload);
+
+    if (!result.ok) {
+      return result;
+    }
+
+    this.contentPersistence.cancel(payload.workspaceId, payload.fileId);
+
+    if (this.persistence.saveFileContent) {
+      try {
+        await this.persistence.saveFileContent(
+          payload.workspaceId,
+          payload.fileId,
+          result.file.content
+        );
+        logger.info("restored file content persisted", {
+          fileId: payload.fileId,
+          workspaceId: payload.workspaceId
+        });
+      } catch (error) {
+        logger.error("failed to persist restored file content", {
+          fileId: payload.fileId,
+          workspaceId: payload.workspaceId
+        });
+        this.contentPersistence.schedule({
+          fileId: payload.fileId,
+          workspaceId: payload.workspaceId
+        });
+      }
+    }
+
+    return result;
+  }
+
+  async createFileVersion(
+    workspaceId: string,
+    fileId: string,
+    name: string | null
+  ) {
+    const file = this.workspaces.getWorkspaceFiles(workspaceId).get(fileId);
+
+    if (!file) {
+      return {
+        ok: false as const,
+        code: "FILE_NOT_FOUND" as const,
+        error: "The selected file no longer exists."
+      };
+    }
+
+    if (!this.persistence.createFileVersion) {
+      return {
+        ok: false as const,
+        code: "FILE_OPERATION_FAILED" as const,
+        error: "Version history is not configured."
+      };
+    }
+
+    try {
+      const version = await this.persistence.createFileVersion(
+        workspaceId,
+        fileId,
+        file.content,
+        name
+      );
+      logger.info("file version saved", {
+        fileId,
+        workspaceId
+      });
+
+      return { ok: true as const, version };
+    } catch (error) {
+      logger.error("failed to save file version", {
+        fileId,
+        workspaceId
+      });
+
+      return {
+        ok: false as const,
+        code: "FILE_OPERATION_FAILED" as const,
+        error: "Could not save this version."
+      };
+    }
   }
 
   hasFile(workspaceId: string, fileId: string) {

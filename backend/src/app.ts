@@ -9,7 +9,7 @@ type CreateAppOptions = {
   aiRateLimitMax?: number;
   aiRateLimitWindowMs?: number;
   aiService?: AiService;
-  corsOrigin?: string;
+  corsOrigin?: string | string[];
   executionDailyRateLimitMax?: number;
   executionDailyRateLimitWindowMs?: number;
   executionRateLimitMax?: number;

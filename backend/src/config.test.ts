@@ -15,8 +15,19 @@ describe("loadConfig", () => {
 
     expect(loadConfig()).toEqual({
       corsOrigin: "https://frontend.example.com",
+      corsOrigins: [
+        "https://frontend.example.com",
+        "http://localhost:3000"
+      ],
       databaseUrl: "postgres://user:pass@example.com/db",
       port: 4100
     });
+  });
+
+  it("uses only the configured CORS origin in production", () => {
+    process.env.CORS_ORIGIN = "https://frontend.example.com";
+    process.env.NODE_ENV = "production";
+
+    expect(loadConfig().corsOrigins).toEqual(["https://frontend.example.com"]);
   });
 });

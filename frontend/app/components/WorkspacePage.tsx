@@ -8,7 +8,8 @@ import {
   Play,
   Share,
   StopFilledAlt,
-  Logout
+  Logout,
+  Time
 } from "@carbon/icons-react";
 import { Button, Modal, Tag, Theme, ToastNotification } from "@carbon/react";
 import { useRouter } from "next/navigation";
@@ -37,6 +38,7 @@ import { ExecutionPanel } from "./ExecutionPanel";
 import type { BottomPanelTab } from "./ExecutionToolbar";
 import { FileDialog } from "./FileDialog";
 import { FileSidebar } from "./FileSidebar";
+import { FileVersionHistoryPanel } from "./FileVersionHistoryPanel";
 import { StatusBar } from "./StatusBar";
 import { TerminalInfoModal } from "./TerminalInfoModal";
 import { ThemeSwitcher } from "./ThemeSwitcher";
@@ -141,6 +143,7 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
   const editorColumnRef = useRef<HTMLElement | null>(null);
   const previousExpandedPanelHeightRef = useRef(defaultPanelHeight);
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
+  const [isVersionPanelOpen, setIsVersionPanelOpen] = useState(false);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
   const [panelHeight, setPanelHeight] = useState(defaultPanelHeight);
   const [panelMaxHeight, setPanelMaxHeight] = useState(defaultPanelHeight);
@@ -656,11 +659,27 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
               Stop
             </Button>
             <Button
+              disabled={!selectedFile}
+              kind="ghost"
+              renderIcon={Time}
+              size="sm"
+              type="button"
+              onClick={() => {
+                setIsAiPanelOpen(false);
+                setIsVersionPanelOpen(true);
+              }}
+            >
+              History
+            </Button>
+            <Button
               kind="tertiary"
               renderIcon={Chat}
               size="sm"
               type="button"
-              onClick={() => setIsAiPanelOpen(true)}
+              onClick={() => {
+                setIsVersionPanelOpen(false);
+                setIsAiPanelOpen(true);
+              }}
             >
               Ask AI
             </Button>
@@ -724,7 +743,7 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
         <div
           className={[
             "workspace",
-            isAiPanelOpen ? "withAiPanel" : "",
+            isAiPanelOpen || isVersionPanelOpen ? "withAiPanel" : "",
             isSidebarCollapsed ? "sidebarCollapsed" : ""
           ]
             .filter(Boolean)
@@ -841,6 +860,15 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
               getSelection={getAiSelection}
               onClose={() => setIsAiPanelOpen(false)}
               onReplaceSelection={replaceAiSelection}
+            />
+          ) : isVersionPanelOpen && selectedFile ? (
+            <FileVersionHistoryPanel
+              isMonacoReady={isMonacoReady}
+              monacoTheme={monacoTheme}
+              selectedFile={selectedFile}
+              workspaceId={workspaceId}
+              onClose={() => setIsVersionPanelOpen(false)}
+              onRestored={() => showFeedback("Version restored.")}
             />
           ) : null}
         </div>

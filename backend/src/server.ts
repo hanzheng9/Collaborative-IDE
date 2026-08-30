@@ -7,6 +7,10 @@ import {
   createWorkspace,
   deleteExpiredWorkspaces,
   deleteFile,
+  createFileVersion,
+  deleteFileVersion,
+  getFileVersion,
+  getFileVersions,
   isDatabaseConfigured,
   loadWorkspace,
   migrateDatabase,
@@ -18,6 +22,7 @@ import {
 } from "./database.js";
 import { ExecutionService } from "./execution/executionService.js";
 import { AiService } from "./ai/aiService.js";
+import { createFileVersionsRouter } from "./fileVersionsRouter.js";
 import { logger } from "./logger.js";
 import { WorkspaceService, type WorkspacePersistence } from "./services/workspaceService.js";
 import { registerSocketHandlers } from "./socketHandlers.js";
@@ -46,6 +51,7 @@ export async function startServer() {
     deleteFile,
     renameFile,
     renameWorkspace,
+    createFileVersion,
     saveFile,
     saveFileContent,
     touchWorkspace
@@ -58,7 +64,7 @@ export async function startServer() {
 
   const app = createApp({
     aiService,
-    corsOrigin: config.corsOrigin,
+    corsOrigin: config.corsOrigins,
     executionService,
     getHealthServices: () => ({
       ai: aiService.isConfigured() ? "configured" : "not_configured",
@@ -75,10 +81,23 @@ export async function startServer() {
   const server = createServer(app);
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
     cors: {
-      origin: config.corsOrigin,
+      origin: config.corsOrigins,
       methods: ["GET", "POST"]
     }
   });
+
+  app.use(
+    "/api/workspaces",
+    createFileVersionsRouter({
+      broadcastCodeChange: (payload) => {
+        io.to(payload.workspaceId).emit("code-change", payload);
+      },
+      deleteFileVersion,
+      getFileVersion,
+      getFileVersions,
+      workspaceService
+    })
+  );
 
   try {
     await migrateDatabase();
