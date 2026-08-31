@@ -378,7 +378,8 @@ textarea:focus-visible,
   grid-template-columns: var(--ide-sidebar-width) minmax(0, 1fr);
 }
 
-.workspace.withAiPanel {
+.workspace.withAiPanel,
+.workspace.withSidePanel {
   grid-template-columns: var(--ide-sidebar-width) minmax(0, 1fr) minmax(320px, 380px);
 }
 
@@ -386,8 +387,14 @@ textarea:focus-visible,
   grid-template-columns: 36px minmax(0, 1fr);
 }
 
-.workspace.withAiPanel.sidebarCollapsed {
+.workspace.withAiPanel.sidebarCollapsed,
+.workspace.withSidePanel.sidebarCollapsed {
   grid-template-columns: 36px minmax(0, 1fr) minmax(320px, 380px);
+}
+
+.workspace.withSidePanel .aiPanel,
+.workspace.withSidePanel .versionPanel {
+  grid-column: 3;
 }
 
 .expiredWorkspace {
@@ -961,7 +968,7 @@ textarea:focus-visible,
 .versionSelectButton span {
   display: grid;
   min-width: 0;
-  overflow: hidden;
+  gap: 1px;
 }
 
 .versionSelectButton strong,
@@ -975,11 +982,13 @@ textarea:focus-visible,
 .versionSelectButton strong {
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.25;
 }
 
 .versionSelectButton small {
   color: var(--ide-text-subtle);
   font-size: 11px;
+  line-height: 1.25;
 }
 
 .versionDeleteButton {
@@ -1481,16 +1490,20 @@ textarea:focus-visible,
   }
 
   .workspace,
-  .workspace.withAiPanel {
+  .workspace.withAiPanel,
+  .workspace.withSidePanel {
     grid-template-columns: 220px minmax(0, 1fr);
   }
 
   .workspace.sidebarCollapsed,
-  .workspace.withAiPanel.sidebarCollapsed {
+  .workspace.withAiPanel.sidebarCollapsed,
+  .workspace.withSidePanel.sidebarCollapsed {
     grid-template-columns: 36px minmax(0, 1fr);
   }
 
-  .workspace.withAiPanel .aiPanel {
+  .workspace.withAiPanel .aiPanel,
+  .workspace.withSidePanel .aiPanel,
+  .workspace.withSidePanel .versionPanel {
     position: fixed;
     z-index: 20;
     top: var(--ide-header-height);
@@ -1519,7 +1532,8 @@ textarea:focus-visible,
   }
 
   .workspace,
-  .workspace.withAiPanel {
+  .workspace.withAiPanel,
+  .workspace.withSidePanel {
     grid-template-columns: 190px minmax(0, 1fr);
   }
 }

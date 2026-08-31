@@ -481,11 +481,13 @@ export function useCollaborativeWorkspace(workspaceId: string) {
 
   useEffect(() => {
     const editor = editorRef.current;
+    const model = editor?.getModel();
 
-    if (!editor || !selectedFileId) {
+    if (!editor || !model || !selectedFileId) {
       return;
     }
 
+    const lineCount = model.getLineCount();
     const decorations = collaborators
       .filter(
         (collaborator) =>
@@ -500,12 +502,22 @@ export function useCollaborativeWorkspace(workspaceId: string) {
           return null;
         }
 
+        if (cursorPosition.lineNumber < 1 || cursorPosition.lineNumber > lineCount) {
+          return null;
+        }
+
+        const maxColumn = model.getLineMaxColumn(cursorPosition.lineNumber);
+        const safeColumn = Math.min(
+          Math.max(1, cursorPosition.column),
+          maxColumn
+        );
+
         return {
           range: {
             startLineNumber: cursorPosition.lineNumber,
-            startColumn: cursorPosition.column,
+            startColumn: safeColumn,
             endLineNumber: cursorPosition.lineNumber,
-            endColumn: cursorPosition.column
+            endColumn: safeColumn
           },
           options: {
             className: `remoteCursor ${getCollaboratorClassName(
@@ -521,7 +533,7 @@ export function useCollaborativeWorkspace(workspaceId: string) {
       remoteCursorDecorationIdsRef.current,
       decorations
     );
-  }, [collaborators, localUserId, selectedFileId]);
+  }, [collaborators, localUserId, selectedFile?.content, selectedFileId]);
 
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor;

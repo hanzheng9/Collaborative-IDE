@@ -743,7 +743,7 @@ export function WorkspacePage({ workspaceId }: WorkspacePageProps) {
         <div
           className={[
             "workspace",
-            isAiPanelOpen || isVersionPanelOpen ? "withAiPanel" : "",
+            isAiPanelOpen || isVersionPanelOpen ? "withSidePanel" : "",
             isSidebarCollapsed ? "sidebarCollapsed" : ""
           ]
             .filter(Boolean)
