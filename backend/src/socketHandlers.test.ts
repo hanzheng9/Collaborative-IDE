@@ -584,4 +584,99 @@ describe("Socket.io collaboration", () => {
     await new Promise<void>((resolve) => localIoServer.close(() => resolve()));
     await new Promise<void>((resolve) => localHttpServer.close(() => resolve()));
   });
+
+  it("does not count repeated joins to an existing workspace as workspace creation", async () => {
+    const localHttpServer = createServer(createApp());
+    const localIoServer = new Server(localHttpServer);
+    registerSocketHandlers(localIoServer, {
+      persistence: {
+        createWorkspace: async () => undefined,
+        loadWorkspace: async () => null
+      },
+      workspaceCreateLimiter: new FixedWindowRateLimiter({
+        max: 1,
+        windowMs: 60_000
+      })
+    });
+    await new Promise<void>((resolve) => localHttpServer.listen(0, resolve));
+    const address = localHttpServer.address() as AddressInfo;
+    const sockets = Array.from({ length: 3 }, () =>
+      createClient(`http://localhost:${address.port}`, {
+        forceNew: true,
+        reconnection: false
+      })
+    );
+
+    await Promise.all(sockets.map((socket) => waitForEvent(socket, "connect")));
+
+    for (const socket of sockets) {
+      socket.emit("join-workspace", {
+        workspaceId: "shared-existing-room",
+        createIfMissing: true
+      });
+      expect(await waitForEvent<{ workspaceId: string }>(
+        socket,
+        "workspace-state"
+      )).toMatchObject({
+        workspaceId: "shared-existing-room"
+      });
+    }
+
+    sockets.forEach((socket) => socket.disconnect());
+    await new Promise<void>((resolve) => localIoServer.close(() => resolve()));
+    await new Promise<void>((resolve) => localHttpServer.close(() => resolve()));
+  });
+
+  it("does not count reconnect joins to an existing workspace as workspace creation", async () => {
+    const localHttpServer = createServer(createApp());
+    const localIoServer = new Server(localHttpServer);
+    registerSocketHandlers(localIoServer, {
+      persistence: {
+        createWorkspace: async () => undefined,
+        loadWorkspace: async () => null
+      },
+      workspaceCreateLimiter: new FixedWindowRateLimiter({
+        max: 1,
+        windowMs: 60_000
+      })
+    });
+    await new Promise<void>((resolve) => localHttpServer.listen(0, resolve));
+    const address = localHttpServer.address() as AddressInfo;
+    const createSocket = () =>
+      createClient(`http://localhost:${address.port}`, {
+        forceNew: true,
+        reconnection: false
+      });
+    const firstSocket = createSocket();
+
+    await waitForEvent(firstSocket, "connect");
+    firstSocket.emit("join-workspace", {
+      workspaceId: "reconnect-existing-room",
+      createIfMissing: true
+    });
+    expect(await waitForEvent<{ workspaceId: string }>(
+      firstSocket,
+      "workspace-state"
+    )).toMatchObject({
+      workspaceId: "reconnect-existing-room"
+    });
+    firstSocket.disconnect();
+
+    const reconnectedSocket = createSocket();
+    await waitForEvent(reconnectedSocket, "connect");
+    reconnectedSocket.emit("join-workspace", {
+      workspaceId: "reconnect-existing-room",
+      createIfMissing: true
+    });
+    expect(await waitForEvent<{ workspaceId: string }>(
+      reconnectedSocket,
+      "workspace-state"
+    )).toMatchObject({
+      workspaceId: "reconnect-existing-room"
+    });
+
+    reconnectedSocket.disconnect();
+    await new Promise<void>((resolve) => localIoServer.close(() => resolve()));
+    await new Promise<void>((resolve) => localHttpServer.close(() => resolve()));
+  });
 });

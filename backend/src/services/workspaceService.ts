@@ -72,7 +72,7 @@ export class WorkspaceService {
 
   async loadWorkspace(
     workspaceId: string,
-    options: { createIfMissing?: boolean } = {}
+    options: { canCreateWorkspace?: () => boolean; createIfMissing?: boolean } = {}
   ): Promise<LoadWorkspaceResult> {
     if (this.workspaces.hasWorkspace(workspaceId)) {
       void this.touchWorkspaceActivity(workspaceId, "join-workspace");
@@ -121,6 +121,17 @@ export class WorkspaceService {
             ok: false as const,
             code: "WORKSPACE_NOT_FOUND" as const,
             error: "Workspace not found or expired."
+          };
+        }
+
+        if (options.createIfMissing && options.canCreateWorkspace?.() === false) {
+          logger.warn("workspace creation rate limit exceeded", {
+            workspaceId
+          });
+          return {
+            ok: false as const,
+            code: "RATE_LIMITED" as const,
+            error: "Too many workspace creation attempts. Try again later."
           };
         }
 
@@ -435,4 +446,8 @@ export class WorkspaceService {
 
 export type LoadWorkspaceResult =
   | { ok: true }
-  | { ok: false; code: "WORKSPACE_NOT_FOUND"; error: string };
+  | {
+      ok: false;
+      code: "RATE_LIMITED" | "WORKSPACE_NOT_FOUND";
+      error: string;
+    };

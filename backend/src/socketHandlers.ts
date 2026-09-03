@@ -143,32 +143,24 @@ export function registerSocketHandlers(
         return;
       }
 
-      if (payload.createIfMissing && options.workspaceCreateLimiter) {
-        const ip = getSocketIp(typedSocket);
-
-        if (!options.workspaceCreateLimiter.isAllowed(ip)) {
-          typedSocket.emit(
-            "workspace-error",
-            createError(
-              "RATE_LIMITED",
-              "Too many workspace creation attempts. Try again later.",
-              {
-                operation: "join-workspace",
-                workspaceId: payload.workspaceId
-              }
-            )
-          );
-          logger.warn("workspace creation rate limit exceeded", {
-            ip,
-            socketId: typedSocket.id,
-            workspaceId: payload.workspaceId
-          });
-          return;
-        }
-      }
-
       try {
         const result = await workspaceService.loadWorkspace(payload.workspaceId, {
+          canCreateWorkspace: options.workspaceCreateLimiter
+            ? () => {
+                const ip = getSocketIp(typedSocket);
+                const allowed = options.workspaceCreateLimiter?.isAllowed(ip) ?? true;
+
+                if (!allowed) {
+                  logger.warn("workspace creation rate limit exceeded", {
+                    ip,
+                    socketId: typedSocket.id,
+                    workspaceId: payload.workspaceId
+                  });
+                }
+
+                return allowed;
+              }
+            : undefined,
           createIfMissing: payload.createIfMissing
         });
 

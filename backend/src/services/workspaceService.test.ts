@@ -66,6 +66,74 @@ describe("WorkspaceService lifecycle", () => {
     );
   });
 
+  it("does not consume workspace creation checks for existing in-memory workspaces", async () => {
+    const canCreateWorkspace = vi.fn().mockReturnValue(true);
+    const service = new WorkspaceService();
+
+    await expect(
+      service.loadWorkspace("new-workspace", {
+        canCreateWorkspace,
+        createIfMissing: true
+      })
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      service.loadWorkspace("new-workspace", {
+        canCreateWorkspace,
+        createIfMissing: true
+      })
+    ).resolves.toEqual({ ok: true });
+
+    expect(canCreateWorkspace).toHaveBeenCalledOnce();
+  });
+
+  it("does not consume workspace creation checks for existing persisted workspaces", async () => {
+    const canCreateWorkspace = vi.fn();
+    const service = new WorkspaceService({
+      persistence: {
+        loadWorkspace: async () => ({
+          files: [
+            {
+              content: "",
+              fileId: "main.ts",
+              fileName: "main.ts",
+              language: "typescript"
+            }
+          ],
+          name: "Existing Workspace"
+        })
+      }
+    });
+
+    await expect(
+      service.loadWorkspace("existing-workspace", {
+        canCreateWorkspace,
+        createIfMissing: true
+      })
+    ).resolves.toEqual({ ok: true });
+
+    expect(canCreateWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("rate limits only actual missing workspace creation", async () => {
+    const canCreateWorkspace = vi.fn().mockReturnValue(false);
+    const service = new WorkspaceService({
+      persistence: {
+        loadWorkspace: async () => null
+      }
+    });
+
+    await expect(
+      service.loadWorkspace("limited-workspace", {
+        canCreateWorkspace,
+        createIfMissing: true
+      })
+    ).resolves.toMatchObject({
+      code: "RATE_LIMITED",
+      ok: false
+    });
+    expect(service.workspaces.hasWorkspace("limited-workspace")).toBe(false);
+  });
+
   it("tracks activity for file creation, rename, delete, and debounced content save", async () => {
     vi.useFakeTimers();
     const persistence: WorkspacePersistence = {
