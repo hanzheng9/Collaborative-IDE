@@ -375,9 +375,26 @@ CORS_ORIGIN="http://localhost:3000"
 DATABASE_URL="postgres://USER:PASSWORD@HOST:PORT/DATABASE"
 WORKSPACE_RETENTION_DAYS="30"
 WORKSPACE_CLEANUP_INTERVAL_HOURS="24"
+TRUST_PROXY_HOPS="1"
 ```
 
 `DATABASE_URL` is optional for local development. Without it, workspace data stays in memory and resets when the backend restarts.
+
+### Rate Limiting
+
+```bash
+RATE_LIMIT_GENERAL_PER_MINUTE="120"
+RATE_LIMIT_AI_PER_HOUR="20"
+RATE_LIMIT_EXECUTION_PER_HOUR="20"
+RATE_LIMIT_WORKSPACE_CREATE_PER_HOUR="20"
+RATE_LIMIT_SOCKET_CONNECTIONS_PER_MINUTE="40"
+```
+
+The backend uses IP-based limits behind Railway's proxy. General REST API
+requests, AI assistance, code execution, workspace creation, and Socket.io
+connection attempts are limited separately. Normal live editor sync events,
+presence updates, and cursor updates are not aggressively rate-limited so
+legitimate collaboration remains responsive.
 
 ### Azure AI
 
@@ -385,8 +402,6 @@ WORKSPACE_CLEANUP_INTERVAL_HOURS="24"
 AZURE_OPENAI_API_KEY="your-api-key"
 AZURE_OPENAI_ENDPOINT="https://your-resource-or-project-endpoint"
 AZURE_OPENAI_DEPLOYMENT="gpt-5-nano"
-AI_RATE_LIMIT_MAX="5"
-AI_RATE_LIMIT_WINDOW_MS="600000"
 AI_MAX_CODE_CHARS="2000"
 AI_MAX_CONTEXT_CHARS="1500"
 AI_MAX_OUTPUT_TOKENS="900"
@@ -427,8 +442,6 @@ JUDGE0_API_URL="https://judge0-ce.p.rapidapi.com"
 JUDGE0_API_KEY="your-rapidapi-key"
 JUDGE0_API_HOST="judge0-ce.p.rapidapi.com"
 JUDGE0_MONTHLY_EXECUTION_LIMIT="1500"
-EXECUTION_RATE_LIMIT_MAX="20"
-EXECUTION_RATE_LIMIT_WINDOW_MS="3600000"
 EXECUTION_DAILY_RATE_LIMIT_MAX="100"
 EXECUTION_DAILY_RATE_LIMIT_WINDOW_MS="86400000"
 ```

@@ -4,6 +4,7 @@ import { io as createClient, type Socket as ClientSocket } from "socket.io-clien
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Server } from "socket.io";
 import { createApp } from "./app.js";
+import { FixedWindowRateLimiter } from "./rateLimits.js";
 import { registerSocketHandlers } from "./socketHandlers.js";
 import { WorkspaceStateStore } from "./workspaceState.js";
 
@@ -509,6 +510,77 @@ describe("Socket.io collaboration", () => {
       files: expect.any(Array)
     });
     localSocket.disconnect();
+    await new Promise<void>((resolve) => localIoServer.close(() => resolve()));
+    await new Promise<void>((resolve) => localHttpServer.close(() => resolve()));
+  });
+
+  it("rate limits explicit workspace creation attempts without blocking normal joins", async () => {
+    const localHttpServer = createServer(createApp());
+    const localIoServer = new Server(localHttpServer);
+    registerSocketHandlers(localIoServer, {
+      persistence: {
+        createWorkspace: async () => undefined,
+        loadWorkspace: async () => null
+      },
+      workspaceCreateLimiter: new FixedWindowRateLimiter({
+        max: 1,
+        windowMs: 60_000
+      })
+    });
+    await new Promise<void>((resolve) => localHttpServer.listen(0, resolve));
+    const address = localHttpServer.address() as AddressInfo;
+    const firstSocket = createClient(`http://localhost:${address.port}`, {
+      forceNew: true,
+      reconnection: false
+    });
+    const secondSocket = createClient(`http://localhost:${address.port}`, {
+      forceNew: true,
+      reconnection: false
+    });
+    const thirdSocket = createClient(`http://localhost:${address.port}`, {
+      forceNew: true,
+      reconnection: false
+    });
+
+    await Promise.all([
+      waitForEvent(firstSocket, "connect"),
+      waitForEvent(secondSocket, "connect"),
+      waitForEvent(thirdSocket, "connect")
+    ]);
+    firstSocket.emit("join-workspace", {
+      workspaceId: "limited-room-a",
+      createIfMissing: true
+    });
+    expect(await waitForEvent<{ workspaceId: string }>(
+      firstSocket,
+      "workspace-state"
+    )).toMatchObject({
+      workspaceId: "limited-room-a"
+    });
+
+    secondSocket.emit("join-workspace", {
+      workspaceId: "limited-room-b",
+      createIfMissing: true
+    });
+    expect(await waitForEvent<{ code: string; message: string }>(
+      secondSocket,
+      "workspace-error"
+    )).toMatchObject({
+      code: "RATE_LIMITED",
+      message: expect.stringMatching(/too many workspace creation/i)
+    });
+
+    thirdSocket.emit("join-workspace", { workspaceId: "limited-room-a" });
+    expect(await waitForEvent<{ workspaceId: string }>(
+      thirdSocket,
+      "workspace-state"
+    )).toMatchObject({
+      workspaceId: "limited-room-a"
+    });
+
+    firstSocket.disconnect();
+    secondSocket.disconnect();
+    thirdSocket.disconnect();
     await new Promise<void>((resolve) => localIoServer.close(() => resolve()));
     await new Promise<void>((resolve) => localHttpServer.close(() => resolve()));
   });

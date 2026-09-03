@@ -107,6 +107,7 @@ export type AppErrorCode =
   | "INVALID_CURSOR_POSITION"
   | "NOT_CONNECTED"
   | "FILE_OPERATION_FAILED"
+  | "RATE_LIMITED"
   | "INTERNAL_SERVER_ERROR";
 
 export type AppErrorPayload = {

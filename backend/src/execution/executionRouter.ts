@@ -26,7 +26,11 @@ export function createExecutionRouter(options: ExecutionRouterOptions) {
   const router = Router();
   const rateLimitMax =
     options.rateLimitMax ??
-    getPositiveNumber(process.env.EXECUTION_RATE_LIMIT_MAX, 20);
+    getPositiveNumber(
+      process.env.RATE_LIMIT_EXECUTION_PER_HOUR ??
+        process.env.EXECUTION_RATE_LIMIT_MAX,
+      20
+    );
   const rateLimitWindowMs =
     options.rateLimitWindowMs ??
     getPositiveNumber(process.env.EXECUTION_RATE_LIMIT_WINDOW_MS, 60 * 60 * 1000);

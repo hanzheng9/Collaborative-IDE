@@ -1,6 +1,7 @@
 import type { Server, Socket } from "socket.io";
 import { CollaboratorStateStore } from "./collaboratorState.js";
 import { logger } from "./logger.js";
+import { getSocketIp, type FixedWindowRateLimiter } from "./rateLimits.js";
 import { WorkspaceService, type WorkspacePersistence } from "./services/workspaceService.js";
 import type {
   AppErrorPayload,
@@ -26,6 +27,7 @@ type RegisterSocketHandlersOptions = {
   contentWriteDelayMs?: number;
   persistence?: WorkspacePersistence;
   workspaces?: WorkspaceStateStore;
+  workspaceCreateLimiter?: FixedWindowRateLimiter;
   workspaceService?: WorkspaceService;
 };
 
@@ -139,6 +141,30 @@ export function registerSocketHandlers(
           })
         );
         return;
+      }
+
+      if (payload.createIfMissing && options.workspaceCreateLimiter) {
+        const ip = getSocketIp(typedSocket);
+
+        if (!options.workspaceCreateLimiter.isAllowed(ip)) {
+          typedSocket.emit(
+            "workspace-error",
+            createError(
+              "RATE_LIMITED",
+              "Too many workspace creation attempts. Try again later.",
+              {
+                operation: "join-workspace",
+                workspaceId: payload.workspaceId
+              }
+            )
+          );
+          logger.warn("workspace creation rate limit exceeded", {
+            ip,
+            socketId: typedSocket.id,
+            workspaceId: payload.workspaceId
+          });
+          return;
+        }
       }
 
       try {

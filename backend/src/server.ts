@@ -24,6 +24,10 @@ import { ExecutionService } from "./execution/executionService.js";
 import { AiService } from "./ai/aiService.js";
 import { createFileVersionsRouter } from "./fileVersionsRouter.js";
 import { logger } from "./logger.js";
+import {
+  applySocketConnectionRateLimit,
+  FixedWindowRateLimiter
+} from "./rateLimits.js";
 import { WorkspaceService, type WorkspacePersistence } from "./services/workspaceService.js";
 import { registerSocketHandlers } from "./socketHandlers.js";
 import type { ClientToServerEvents, ServerToClientEvents } from "./types.js";
@@ -63,9 +67,15 @@ export async function startServer() {
   let persistenceAvailable = isDatabaseConfigured();
 
   const app = createApp({
+    aiRateLimitMax: config.rateLimits.aiPerHour,
+    aiRateLimitWindowMs: 60 * 60 * 1000,
     aiService,
     corsOrigin: config.corsOrigins,
+    executionRateLimitMax: config.rateLimits.codeExecutionPerHour,
+    executionRateLimitWindowMs: 60 * 60 * 1000,
     executionService,
+    generalRateLimitMax: config.rateLimits.generalRestPerMinute,
+    generalRateLimitWindowMs: 60 * 1000,
     getHealthServices: () => ({
       ai: aiService.isConfigured() ? "configured" : "not_configured",
       database: persistenceAvailable
@@ -76,7 +86,8 @@ export async function startServer() {
       execution: executionService.isConfigured()
         ? "configured"
         : "not_configured"
-    })
+    }),
+    trustProxy: config.trustProxy
   });
   const server = createServer(app);
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
@@ -85,6 +96,16 @@ export async function startServer() {
       methods: ["GET", "POST"]
     }
   });
+  const socketConnectionLimiter = new FixedWindowRateLimiter({
+    max: config.rateLimits.socketConnectionsPerMinute,
+    windowMs: 60 * 1000
+  });
+  const workspaceCreateLimiter = new FixedWindowRateLimiter({
+    max: config.rateLimits.workspaceCreatePerHour,
+    windowMs: 60 * 60 * 1000
+  });
+
+  applySocketConnectionRateLimit(io, socketConnectionLimiter);
 
   app.use(
     "/api/workspaces",
@@ -110,6 +131,7 @@ export async function startServer() {
   }
 
   const { flushPendingWrites, workspaceService: registeredWorkspaceService } = registerSocketHandlers(io, {
+    workspaceCreateLimiter,
     workspaceService
   });
 
@@ -120,6 +142,13 @@ export async function startServer() {
     process.env.WORKSPACE_CLEANUP_INTERVAL_HOURS ?? 24
   );
   let workspaceCleanupTimer: ReturnType<typeof setInterval> | null = null;
+  const rateLimitCleanupTimer = setInterval(
+    () => {
+      socketConnectionLimiter.cleanup();
+      workspaceCreateLimiter.cleanup();
+    },
+    5 * 60 * 1000
+  );
 
   const runWorkspaceCleanup = async () => {
     if (!isDatabaseConfigured()) {
@@ -153,7 +182,13 @@ export async function startServer() {
     logger.info("backend listening", {
       codeExecution: executionService.isConfigured() ? "enabled" : "disabled",
       postgreSQLPersistence: persistenceAvailable ? "enabled" : "disabled",
-      port: config.port
+      port: config.port,
+      rateLimitAiPerHour: config.rateLimits.aiPerHour,
+      rateLimitExecutionPerHour: config.rateLimits.codeExecutionPerHour,
+      rateLimitGeneralPerMinute: config.rateLimits.generalRestPerMinute,
+      rateLimitSocketConnectionsPerMinute:
+        config.rateLimits.socketConnectionsPerMinute,
+      rateLimitWorkspaceCreatePerHour: config.rateLimits.workspaceCreatePerHour
     });
   });
 
@@ -162,6 +197,7 @@ export async function startServer() {
     if (workspaceCleanupTimer) {
       clearInterval(workspaceCleanupTimer);
     }
+    clearInterval(rateLimitCleanupTimer);
     await flushPendingWrites();
     await new Promise<void>((resolve) => io.close(() => resolve()));
     await new Promise<void>((resolve) => server.close(() => resolve()));
