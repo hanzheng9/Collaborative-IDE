@@ -24,6 +24,8 @@ Remote cursor decorations show where collaborators are editing. Clicking a colla
 
 Manual file checkpoints can be saved, previewed, restored, and deleted. This demo saves a version, deletes the live code, restores the saved version from another screen, deletes that saved version, and shows the synced deletion plus the automatic `Before restore` fallback checkpoint.
 
+Note: the GIF recordings are compressed, so some text appears softer than the actual UI. The deployed app and static screenshots below show the interface more clearly.
+
 ### Landing Page
 
 ![Collaborative IDE landing page with Create Workspace and Join Existing Workspace controls.](docs/screenshots/landing-page.png)
@@ -49,6 +51,8 @@ Manual file checkpoints can be saved, previewed, restored, and deleted. This dem
 ![Collaborative IDE AI assistant panel showing selected-code bug fix output and a Replace Selection review action.](docs/screenshots/ai-assistant.png)
 
 ### Full Demo Video
+
+Coming soon: a longer walkthrough covering workspace creation, real-time collaboration, remote cursors, version history, code execution, AI assistance, persistence, and theming.
 
 <!--
 Add a longer walkthrough video link here.
