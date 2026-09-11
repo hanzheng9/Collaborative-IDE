@@ -42,9 +42,9 @@ Note: the GIF recordings are compressed, so some text appears softer than the ac
 
 ![Collaborative IDE output panel showing a successful code execution result.](docs/screenshots/code-execution.png)
 
-### Real-Time Collaboration
+### Version History UI
 
-![Collaborative IDE workspace with three connected collaborators and remote cursor indicators in Monaco.](docs/screenshots/realtime-collaboration.png)
+![Collaborative IDE version history panel showing saved checkpoints for a file.](docs/screenshots/version-history.png)
 
 ### AI Assistant
 
