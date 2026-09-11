@@ -18,6 +18,12 @@ Two users edit the same workspace in split screen. Code changes and newly create
 
 Remote cursor decorations show where collaborators are editing. Clicking a collaborator jumps to their cursor, including when they are viewing a different file.
 
+### Version History
+
+![Split-screen demo showing version history save, preview, restore, synced deletion, and fallback checkpoint behavior.](docs/screenshots/version-history-demo.gif)
+
+Manual file checkpoints can be saved, previewed, restored, and deleted. This demo saves a version, deletes the live code, restores the saved version from another screen, deletes that saved version, and shows the synced deletion plus the automatic `Before restore` fallback checkpoint.
+
 ### Landing Page
 
 ![Collaborative IDE landing page with Create Workspace and Join Existing Workspace controls.](docs/screenshots/landing-page.png)
@@ -88,6 +94,7 @@ The project intentionally separates live collaboration state from durable storag
 - Multi-file workspace model
 - Create, rename, delete, and switch files with real-time synchronization
 - Persistent workspace and file storage in PostgreSQL
+- File version history with manual save, preview, restore, delete, and `Before restore` fallback checkpoints
 - User-facing workspace names with inline rename support
 - Browser-local recent workspace history
 - Anonymous temporary collaborator names and colors
